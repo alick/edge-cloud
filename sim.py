@@ -1,0 +1,86 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# Simulation of Edge Cloud Migration
+
+from collections import defaultdict # defaultdict provides default values for missing keys
+
+# application code
+class EdgeCloud():
+    """
+    K  # number of servers hosted by edge cloud
+    M  # cost ratio of migration over forwarding
+    """
+    def __init__(self, path_to_file, K=5, M=5):
+        self.K = K
+        self.M = M
+        self.requests = []
+        with open(path_to_file, 'r') as f:
+            for line in f:
+                r = int(line) # request
+                self.requests.append(r)
+        print('# services: {0}'.format(len(self.requests)))
+
+        requests_cnt = defaultdict(int) # a dict with default integer value 0
+        for r in self.requests:
+            requests_cnt[r] += 1
+        print('# unique services: {0}'.format(len(requests_cnt)))
+
+        # The requests sorted by values and then keys.
+        self.sorted_requests_cnt = sorted(requests_cnt.items(), key=lambda x : (x[1], x[0]), reverse=True)
+
+        # The requests sorted by keys (IDs) in ascending order.
+        sorted_requests = sorted(requests_cnt.keys())
+
+        # Fill in the initial K edge cloud services.
+        # We use the K services with lowest id.
+        self.edge_services = set(sorted_requests[0:K])
+        self.cost_migration = 0
+        self.cost_forwarding = 0
+        self.cost = 0
+    def run_belady(self):
+        raise Exception('Unimplemented!')
+    def run_online(self):
+        raise Exception('Unimplemented!')
+    def run_no_migration(self):
+        # If no migration happens...
+        for r in self.requests:
+            if r not in self.edge_services:
+                self.cost_forwarding += 1
+        assert self.cost_migration == 0
+        self.cost = self.cost_forwarding
+    def get_cost(self):
+        return self.cost
+    # Offline static algorithm.
+    def run_static(self):
+        # Find the K most popular services, and migrate them.
+        edge_services_wished = set([x[0] for x in self.sorted_requests_cnt[0:self.K]])
+        edge_services_migrated = edge_services_wished - self.edge_services
+        self.migrations = [(1, tuple(edge_services_migrated))]
+        self.cost_migration = self.M * len(edge_services_migrated)
+        # After migration, edge services are the ones we want.
+        self.cost_forwarding = 0
+        self.edge_services = edge_services_wished
+        for r in self.requests:
+            if r not in self.edge_services:
+                self.cost_forwarding += 1
+        assert self.cost_forwarding == len(self.requests) - sum([x[1] for x in self.sorted_requests_cnt[0:self.K]])
+        self.cost = self.cost_migration + self.cost_forwarding
+    def print_migrations(self):
+        print('Time slot\tMigrated Service ID')
+        for migration in self.migrations:
+            time = migration[0]
+            migrated = migration[1]
+            print('{}\t\t{}'.format(time, migrated))
+
+if __name__ == '__main__':
+    ec = EdgeCloud('traces/requests-job_id.dat', K=5, M=5)
+
+    ec.run_no_migration()
+    print('Total cost with no migration: {}.'.format(ec.get_cost()))
+
+    ec.run_static()
+    ec.print_migrations()
+    print('Total cost for offline static algorithm: {}.'.format(ec.get_cost()))
+
+    ec.run_online()
+    ec.run_belady()
