@@ -71,6 +71,11 @@ class EdgeCloud():
         """
         self.reset()
 
+        # b_{i,j} = max_tau (sum x_j(l) - sum x_i(l))^+ for each pair of service
+        # Here sum is over the latest tau arrivals.
+        # In the latest tau arrivals, i is hosted by the edge cloud,
+        # and j is not hosted by the edge cloud.
+        b = defaultdict(int)
         # The sequence numbers of the most recent 2*M arrivals for all services
         seqnums = defaultdict(partial(deque, maxlen=2*self.M))
         # The sequence number of the latest migration for each service.
@@ -86,27 +91,21 @@ class EdgeCloud():
             seqnums[r].append(seqnum_cur)
             print('n={}, request={}'.format(seqnum_cur, r))
             # r == S_j
-            migration = False
             if r in self.edge_services:
                 # r will be hosted by the edge cloud immediately. No cost.
+                for b_key in b:
+                    if ((b_key[0] == r) and
+                        (b_key[1] not in self.edge_services)):
+                        b[b_key] = max(0, b[b_key] - 1)
                 print('result: hosted')
                 continue
-            # Now we know r is not hosted by the edge cloud.
-            # r (S_j) should not be hosted by the edge cloud.
-            search_start = seqnum_del[r] + 1
+            # Now we know r (i.e. S_j, i^*) is not hosted by the edge cloud.
+            migration = False
             for req in self.edge_services:
                 # req (S_i) should be hosted by the edge cloud.
-                search_start = max(search_start, seqnum_mig[req])
-                for s in range(search_start, seqnum_cur + 1):
-                    requests_latest = self.requests_seen[s:-1]
-                    r_cnt = requests_latest.count(r)
-                    req_cnt = requests_latest.count(req)
-                    if r_cnt - req_cnt >= 2*self.M:
-                        migration = True
-                        tau = seqnum_cur - s + 1
-                        break
-                if migration:
-                    break
+                b[(req, r)] += 1
+                if b[(req, r)] >= 2*self.M:
+                    migration = True
             if not migration:
                 # r needs to be forwarded.
                 print('result: forwarded')
@@ -139,6 +138,10 @@ class EdgeCloud():
             self.edge_services.add(r)
             assert r in self.edge_services
             assert svc_del not in self.edge_services
+            # Need to reset b_{i^*,j} = 0 for all j
+            for b_key in b:
+                if b_key[0] == r:
+                    b[b_key] = 0
             self.migrations.append((seqnum_cur, r, svc_del))
             self.cost_migration += self.M
             print('result: migrated. ({} deleted)'.format(svc_del))
