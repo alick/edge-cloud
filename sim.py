@@ -72,7 +72,10 @@ class EdgeCloud():
         edge_services_wished = set(
             x[0] for x in self.sorted_requests_cnt[0:self.K])
         edge_services_migrated = edge_services_wished - self.edge_services
-        self.migrations = [(1, tuple(edge_services_migrated))]
+        self.migrations = [(
+            1,
+            tuple(edge_services_migrated),
+            tuple(self.edge_services - edge_services_wished))]
         self.cost_migration = self.M * len(edge_services_migrated)
         # After migration, edge services are the ones we want.
         self.cost_forwarding = 0
@@ -85,11 +88,12 @@ class EdgeCloud():
         self.cost = self.cost_migration + self.cost_forwarding
 
     def print_migrations(self):
-        print('Time slot\tMigrated Service ID')
+        print('Time slot\tMigrated Service ID(s)\tDeleted Service ID(s)')
         for migration in self.migrations:
             time = migration[0]
             migrated = migration[1]
-            print('{}\t\t{}'.format(time, migrated))
+            deleted = migration[2]
+            print('{}\t\t{}\t{}'.format(time, migrated, deleted))
 
 
 if __name__ == '__main__':
