@@ -85,7 +85,7 @@ class EdgeCloud():
         """
         self.reset()
 
-        # b_{i,j} = max_tau (sum x_j(l) - sum x_i(l))^+ for each pair of service
+        # b_{i,j} = max_tau (sum x_j(l) - sum x_i(l))^+ for each service pair
         # Here sum is over the latest tau arrivals.
         # In the latest tau arrivals, i is hosted by the edge cloud,
         # and j is not hosted by the edge cloud.
@@ -109,7 +109,7 @@ class EdgeCloud():
                 # r will be hosted by the edge cloud immediately. No cost.
                 for b_key in b:
                     if ((b_key[0] == r) and
-                        (b_key[1] not in self.edge_services)):
+                            (b_key[1] not in self.edge_services)):
                         b[b_key] = max(0, b[b_key] - 1)
                 print('result: hosted')
                 continue
@@ -213,13 +213,15 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Simulate edge cloud migration.')
     parser.add_argument('-N', dest='N_requests', type=int, default=None,
-                       help='number of requests from file used in simulation')
+                        help='number of requests from file used in simulation')
     parser.add_argument('-K', dest='K', type=int, default=5,
-                       help='number of services hosted by edge cloud '
-                            '(default: 5)')
+                        help='number of services hosted by edge cloud '
+                             '(default: 5)')
     parser.add_argument('-M', dest='M', type=float, default=5,
-                       help='cost ratio of migration over forwarding '
-                            '(default: 5)')
+                        help='cost ratio of migration over forwarding '
+                             '(default: 5)')
+    parser.add_argument('-d', '--debug', dest='debug', action=store_true,
+                        help='enable debug (default: disabled)')
 
     args = parser.parse_args()
 
