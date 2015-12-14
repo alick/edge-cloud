@@ -5,17 +5,20 @@
 # defaultdict provides default values for missing keys
 from collections import defaultdict, deque
 from functools import partial
+import argparse
 
 
 class EdgeCloud():
     """The EdgeCloud class holds all the magic."""
 
-    def __init__(self, path_to_file, K=5, M=5):
+    def __init__(self, path_to_file, K=5, M=5, N_requests=None):
         """Initialize with a file containing the sequence of requests.
 
         :param path_to_file: string to specify the path to the file
         :param K: number of servers hosted by edge cloud (default: 5)
         :param M: cost ratio of migration over forwarding (default: 5)
+        :param N_requests: only use the first N_requests requests from
+        file. Useful for debugging. Default is to use all requests.
         """
         if K >= 1:
             self.K = K
@@ -25,11 +28,22 @@ class EdgeCloud():
             self.M = M
         else:
             raise Exception('The parameter M should be at least 1.')
+        if N_requests is None or N_requests >= 1:
+            self.N_requests = N_requests
+        else:
+            raise Exception('The parameter N_requests should be '
+                            'a postive integer or None.')
         self.requests = []
         with open(path_to_file, 'r') as f:
-            for line in f:
-                r = int(line)  # one request specified by its service id
-                self.requests.append(r)
+            if self.N_requests is None:
+                for line in f:
+                    r = int(line)  # one request specified by its service id
+                    self.requests.append(r)
+            else:
+                for x in range(self.N_requests):
+                    line = next(f)
+                    r = int(line)
+                    self.requests.append(r)
         print('# services: {0}'.format(len(self.requests)))
 
         requests_cnt = defaultdict(int)  # a dict with default integer value 0
@@ -196,7 +210,21 @@ class EdgeCloud():
 
 
 if __name__ == '__main__':
-    ec = EdgeCloud('traces/requests-job_id.dat', K=5, M=5)
+    parser = argparse.ArgumentParser(
+        description='Simulate edge cloud migration.')
+    parser.add_argument('-N', dest='N_requests', type=int, default=None,
+                       help='number of requests from file used in simulation')
+    parser.add_argument('-K', dest='K', type=int, default=5,
+                       help='number of services hosted by edge cloud '
+                            '(default: 5)')
+    parser.add_argument('-M', dest='M', type=float, default=5,
+                       help='cost ratio of migration over forwarding '
+                            '(default: 5)')
+
+    args = parser.parse_args()
+
+    ec = EdgeCloud('traces/requests-job_id.dat', K=args.K, M=args.M,
+                   N_requests=args.N_requests)
 
     ec.run_RL()
     ec.print_migrations()
