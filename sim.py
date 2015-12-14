@@ -16,8 +16,14 @@ class EdgeCloud():
         :param K: number of servers hosted by edge cloud (default: 5)
         :param M: cost ratio of migration over forwarding (default: 5)
         """
-        self.K = K
-        self.M = M
+        if K >= 1:
+            self.K = K
+        else:
+            raise Exception('The parameter K should be a postive integer.')
+        if M >= 1:
+            self.M = M
+        else:
+            raise Exception('The parameter M should be at least 1.')
         self.requests = []
         with open(path_to_file, 'r') as f:
             for line in f:
