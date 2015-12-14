@@ -37,22 +37,30 @@ class EdgeCloud():
             reverse=True)
 
         # The requests sorted by keys (IDs) in ascending order.
-        sorted_requests = sorted(requests_cnt.keys())
+        self.sorted_requests = sorted(requests_cnt.keys())
 
+        self.reset()
+
+    def reset(self):
+        """Reset parameters updated by algorithms."""
         # Fill in the initial K edge cloud services.
         # We use the K services with lowest id.
-        self.edge_services = set(sorted_requests[0:K])
+        self.edge_services = set(self.sorted_requests[0:self.K])
         self.cost_migration = 0
         self.cost_forwarding = 0
         self.cost = 0
+        self.migrations = []
+        self.requests_seen = []
 
     def run_belady(self):
+        self.reset()
         raise Exception('Unimplemented!')
 
     def run_online(self):
         raise Exception('Unimplemented!')
 
     def run_no_migration(self):
+        self.reset()
         # If no migration happens...
         for r in self.requests:
             if r not in self.edge_services:
@@ -68,14 +76,15 @@ class EdgeCloud():
 
         This algorithm migrates the K most popular services once and for all.
         """
+        self.reset()
         # Find the K most popular services, and migrate them.
         edge_services_wished = set(
             x[0] for x in self.sorted_requests_cnt[0:self.K])
         edge_services_migrated = edge_services_wished - self.edge_services
-        self.migrations = [(
+        self.migrations.append((
             1,
             tuple(edge_services_migrated),
-            tuple(self.edge_services - edge_services_wished))]
+            tuple(self.edge_services - edge_services_wished)))
         self.cost_migration = self.M * len(edge_services_migrated)
         # After migration, edge services are the ones we want.
         self.cost_forwarding = 0
