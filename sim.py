@@ -3,7 +3,8 @@
 # Simulation of Edge Cloud Migration
 
 # defaultdict provides default values for missing keys
-from collections import defaultdict
+from collections import defaultdict, deque
+from functools import partial
 
 
 class EdgeCloud():
@@ -62,8 +63,88 @@ class EdgeCloud():
         self.reset()
         raise Exception('Unimplemented!')
 
-    def run_online(self):
-        raise Exception('Unimplemented!')
+    def run_RL(self):
+        """The RM-LRU (RL) Online algorithm.
+
+        The algorithm combines a retrospective migration (RM) policy and a
+        least recently used (LRU) policy for deletion.
+        """
+        self.reset()
+
+        # The sequence numbers of the most recent 2*M arrivals for all services
+        seqnums = defaultdict(partial(deque, maxlen=2*self.M))
+        # The sequence number of the latest migration for each service.
+        seqnum_mig = defaultdict(int)
+        # The sequence number of the latest deletion for each service.
+        seqnum_del = defaultdict(int)
+        seqnum_cur = 0
+
+        for r in self.requests:
+            seqnum_cur += 1
+            self.requests_seen.append(r)
+            assert len(self.requests_seen) == seqnum_cur
+            seqnums[r].append(seqnum_cur)
+            print('n={}, request={}'.format(seqnum_cur, r))
+            # r == S_j
+            migration = False
+            if r in self.edge_services:
+                # r will be hosted by the edge cloud immediately. No cost.
+                print('result: hosted')
+                continue
+            # Now we know r is not hosted by the edge cloud.
+            # r (S_j) should not be hosted by the edge cloud.
+            search_start = seqnum_del[r] + 1
+            for req in self.edge_services:
+                # req (S_i) should be hosted by the edge cloud.
+                search_start = max(search_start, seqnum_mig[req])
+                for s in range(search_start, seqnum_cur + 1):
+                    requests_latest = self.requests_seen[s:-1]
+                    r_cnt = requests_latest.count(r)
+                    req_cnt = requests_latest.count(req)
+                    if r_cnt - req_cnt >= 2*self.M:
+                        migration = True
+                        tau = seqnum_cur - s + 1
+                        break
+                if migration:
+                    break
+            if not migration:
+                # r needs to be forwarded.
+                print('result: forwarded')
+                self.cost_forwarding += 1
+                continue
+            assert migration is True
+            # Find the service to be deleted.
+            # It is the one in edge cloud with smallest sequece number for the
+            # past 2M requests
+            svc_del = None
+            for svc in self.edge_services:
+                if len(seqnums[svc]) < 2*self.M:
+                    # We have not seen >= 2M requests from svc from beginning.
+                    # Set it to 0 so that we prefer it.
+                    seqnum_2M = 0
+                else:
+                    seqnum_2M = seqnums[svc][0]
+                # Initialize svc_del with the first service we encounter.
+                if svc_del is None:
+                    svc_del = svc
+                    svc_del_seq = seqnum_2M
+                    continue
+                if seqnum_2M < svc_del_seq:
+                    svc_del = svc
+                    svc_del_seq = seqnum_2M
+            assert svc_del in self.edge_services
+            assert svc_del_seq < seqnum_cur
+            # Run and record the migration and deletion.
+            self.edge_services.remove(svc_del)
+            self.edge_services.add(r)
+            assert r in self.edge_services
+            assert svc_del not in self.edge_services
+            self.migrations.append((seqnum_cur, r, svc_del))
+            self.cost_migration += self.M
+            print('result: migrated. ({} deleted)'.format(svc_del))
+            seqnum_mig[r] = seqnum_cur
+            seqnum_del[svc_del] = seqnum_cur
+        self.cost = self.cost_migration + self.cost_forwarding
 
     def run_no_migration(self):
         self.reset()
@@ -114,6 +195,10 @@ class EdgeCloud():
 if __name__ == '__main__':
     ec = EdgeCloud('traces/requests-job_id.dat', K=5, M=5)
 
+    ec.run_RL()
+    ec.print_migrations()
+    print('Total cost for RL online algorithm: {}.'.format(ec.get_cost()))
+
     ec.run_no_migration()
     print('Total cost with no migration: {}.'.format(ec.get_cost()))
 
@@ -121,5 +206,4 @@ if __name__ == '__main__':
     ec.print_migrations()
     print('Total cost for offline static algorithm: {}.'.format(ec.get_cost()))
 
-    ec.run_online()
     ec.run_belady()
