@@ -154,9 +154,10 @@ class EdgeCloud():
             self.edge_services.add(r)
             assert r in self.edge_services
             assert svc_del not in self.edge_services
-            # Need to reset b_{i^*,j} = 0 for all j
+            # Need to reset b_{i^*,j} = 0 for all j where i^* to be migrated,
+            # and b_{i,j^*} = 0 for all i where j^* to be deleted.
             for b_key in b:
-                if b_key[0] == r:
+                if b_key[0] == r or b_key[1] == svc_del:
                     b[b_key] = 0
             self.migrations.append((seqnum_cur, r, svc_del))
             self.cost_migration += self.M
