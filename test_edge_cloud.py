@@ -8,11 +8,11 @@ import pytest
 class TestEdgeCloud:
     @pytest.fixture
     def ec(self):
-        return EdgeCloud('traces/requests-job_id.dat', K=5, M=5, N_requests=5000)
+        return EdgeCloud('traces/requests-job_id.dat', K=5, M=5, N=5000)
     def test_init(self, ec):
         assert ec.K == 5 == len(ec.edge_services)
         assert ec.M == 5
-        assert len(ec.requests) == ec.N_requests == 5000
+        assert len(ec.requests) == ec.N == 5000
         assert ec.sorted_requests[0] < ec.sorted_requests[1] \
                                      < ec.sorted_requests[-1]
         assert ec.cost == 0

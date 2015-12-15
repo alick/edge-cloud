@@ -13,13 +13,13 @@ import sys
 class EdgeCloud():
     """The EdgeCloud class holds all the magic."""
 
-    def __init__(self, path_to_file, K=5, M=5, N_requests=None):
+    def __init__(self, path_to_file, K=5, M=5, N=None):
         """Initialize with a file containing the sequence of requests.
 
         :param path_to_file: string to specify the path to the file
         :param K: number of servers hosted by edge cloud (default: 5)
         :param M: cost ratio of migration over forwarding (default: 5)
-        :param N_requests: only use the first N_requests requests from
+        :param N: only use the first N requests from
         file. Useful for debugging. Default is to use all requests.
         """
         if K >= 1:
@@ -30,19 +30,19 @@ class EdgeCloud():
             self.M = M
         else:
             raise Exception('The parameter M should be at least 1.')
-        if N_requests is None or N_requests >= 1:
-            self.N_requests = N_requests
+        if N is None or N >= 1:
+            self.N = N
         else:
-            raise Exception('The parameter N_requests should be '
+            raise Exception('The parameter N should be '
                             'a postive integer or None.')
         self.requests = []
         with open(path_to_file, 'r') as f:
-            if self.N_requests is None:
+            if self.N is None:
                 for line in f:
                     r = int(line)  # one request specified by its service id
                     self.requests.append(r)
             else:
-                for x in range(self.N_requests):
+                for x in range(self.N):
                     line = next(f)
                     r = int(line)
                     self.requests.append(r)
@@ -215,7 +215,7 @@ class EdgeCloud():
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Simulate edge cloud migration.')
-    parser.add_argument('-N', dest='N_requests', type=int, default=None,
+    parser.add_argument('-N', dest='N', type=int, default=None,
                         help='number of requests from file used in simulation')
     parser.add_argument('-K', dest='K', type=int, default=5,
                         help='number of services hosted by edge cloud '
@@ -234,14 +234,14 @@ if __name__ == '__main__':
             level=logging.DEBUG,
             format='%(message)s',
             filename='sim-N{}-K{}-M{}.log'.format(
-                args.N_requests, args.K, args.M),
+                args.N, args.K, args.M),
             filemode='w')
     else:
         logging.basicConfig(level=logging.INFO,
             stream=sys.stdout, format='%(message)s')
 
     ec = EdgeCloud('traces/requests-job_id.dat', K=args.K, M=args.M,
-                   N_requests=args.N_requests)
+                   N=args.N)
 
     ec.run_RL()
     ec.print_migrations()
