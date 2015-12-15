@@ -6,6 +6,8 @@
 from collections import defaultdict, deque
 from functools import partial
 import argparse
+import logging
+import sys
 
 
 class EdgeCloud():
@@ -44,12 +46,12 @@ class EdgeCloud():
                     line = next(f)
                     r = int(line)
                     self.requests.append(r)
-        print('# services: {0}'.format(len(self.requests)))
+        logging.debug('# services: {0}'.format(len(self.requests)))
 
         requests_cnt = defaultdict(int)  # a dict with default integer value 0
         for r in self.requests:
             requests_cnt[r] += 1
-        print('# unique services: {0}'.format(len(requests_cnt)))
+        logging.debug('# unique services: {0}'.format(len(requests_cnt)))
 
         # The requests sorted by values and then keys.
         self.sorted_requests_cnt = sorted(
@@ -103,7 +105,7 @@ class EdgeCloud():
             self.requests_seen.append(r)
             assert len(self.requests_seen) == seqnum_cur
             seqnums[r].append(seqnum_cur)
-            print('n={}, request={}'.format(seqnum_cur, r))
+            logging.debug('n={}, request={}'.format(seqnum_cur, r))
             # r == S_j
             if r in self.edge_services:
                 # r will be hosted by the edge cloud immediately. No cost.
@@ -111,7 +113,7 @@ class EdgeCloud():
                     if ((b_key[0] == r) and
                             (b_key[1] not in self.edge_services)):
                         b[b_key] = max(0, b[b_key] - 1)
-                print('result: hosted')
+                logging.debug('result: hosted')
                 continue
             # Now we know r (i.e. S_j, i^*) is not hosted by the edge cloud.
             migration = False
@@ -122,7 +124,7 @@ class EdgeCloud():
                     migration = True
             if not migration:
                 # r needs to be forwarded.
-                print('result: forwarded')
+                logging.debug('result: forwarded')
                 self.cost_forwarding += 1
                 continue
             assert migration is True
@@ -158,7 +160,7 @@ class EdgeCloud():
                     b[b_key] = 0
             self.migrations.append((seqnum_cur, r, svc_del))
             self.cost_migration += self.M
-            print('result: migrated. ({} deleted)'.format(svc_del))
+            logging.debug('result: migrated. ({} deleted)'.format(svc_del))
             seqnum_mig[r] = seqnum_cur
             seqnum_del[svc_del] = seqnum_cur
         self.cost = self.cost_migration + self.cost_forwarding
@@ -201,12 +203,12 @@ class EdgeCloud():
         self.cost = self.cost_migration + self.cost_forwarding
 
     def print_migrations(self):
-        print('Time slot\tMigrated Service ID(s)\tDeleted Service ID(s)')
+        logging.info('Time slot\tMigrated Service ID(s)\tDeleted Service ID(s)')
         for migration in self.migrations:
             time = migration[0]
             migrated = migration[1]
             deleted = migration[2]
-            print('{}\t\t{}\t{}'.format(time, migrated, deleted))
+            logging.info('{}\t\t{}\t{}'.format(time, migrated, deleted))
 
 
 if __name__ == '__main__':
@@ -220,23 +222,35 @@ if __name__ == '__main__':
     parser.add_argument('-M', dest='M', type=float, default=5,
                         help='cost ratio of migration over forwarding '
                              '(default: 5)')
-    parser.add_argument('-d', '--debug', dest='debug', action=store_true,
+    parser.add_argument('-d', '--debug', dest='debug', action='store_true',
                         help='enable debug (default: disabled)')
 
     args = parser.parse_args()
+
+    # Configure logging.
+    if args.debug:
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format='%(message)s',
+            filename='sim-N{}-K{}-M{}.log'.format(
+                args.N_requests, args.K, args.M),
+            filemode='w')
+    else:
+        logging.basicConfig(level=logging.INFO,
+            stream=sys.stdout, format='%(message)s')
 
     ec = EdgeCloud('traces/requests-job_id.dat', K=args.K, M=args.M,
                    N_requests=args.N_requests)
 
     ec.run_RL()
     ec.print_migrations()
-    print('Total cost for RL online algorithm: {}.'.format(ec.get_cost()))
+    logging.info('Total cost for RL online algorithm: {}.'.format(ec.get_cost()))
 
     ec.run_no_migration()
-    print('Total cost with no migration: {}.'.format(ec.get_cost()))
+    logging.info('Total cost with no migration: {}.'.format(ec.get_cost()))
 
     ec.run_static()
     ec.print_migrations()
-    print('Total cost for offline static algorithm: {}.'.format(ec.get_cost()))
+    logging.info('Total cost for offline static algorithm: {}.'.format(ec.get_cost()))
 
     ec.run_belady()
