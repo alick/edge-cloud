@@ -98,14 +98,14 @@ class EdgeCloud():
         seqnum_mig = defaultdict(int)
         # The sequence number of the latest deletion for each service.
         seqnum_del = defaultdict(int)
-        seqnum_cur = 0
+        n = 0
 
         for r in self.requests:
-            seqnum_cur += 1
+            n += 1
             self.requests_seen.append(r)
-            assert len(self.requests_seen) == seqnum_cur
-            seqnums[r].append(seqnum_cur)
-            logging.debug('n={}, request={}'.format(seqnum_cur, r))
+            assert len(self.requests_seen) == n
+            seqnums[r].append(n)
+            logging.debug('n={}, request={}'.format(n, r))
             # r == S_j
             if r in self.edge_services:
                 # r will be hosted by the edge cloud immediately. No cost.
@@ -148,7 +148,7 @@ class EdgeCloud():
                     svc_del = svc
                     svc_del_seq = seqnum_2M
             assert svc_del in self.edge_services
-            assert svc_del_seq < seqnum_cur
+            assert svc_del_seq < n
             # Run and record the migration and deletion.
             self.edge_services.remove(svc_del)
             self.edge_services.add(r)
@@ -159,11 +159,11 @@ class EdgeCloud():
             for b_key in b:
                 if b_key[0] == r or b_key[1] == svc_del:
                     b[b_key] = 0
-            self.migrations.append((seqnum_cur, r, svc_del))
+            self.migrations.append((n, r, svc_del))
             self.cost_migration += self.M
             logging.debug('result: migrated. ({} deleted)'.format(svc_del))
-            seqnum_mig[r] = seqnum_cur
-            seqnum_del[svc_del] = seqnum_cur
+            seqnum_mig[r] = n
+            seqnum_del[svc_del] = n
         self.cost = self.cost_migration + self.cost_forwarding
 
     def run_no_migration(self):
