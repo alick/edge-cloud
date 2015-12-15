@@ -31,7 +31,7 @@ class TestEdgeCloud:
         assert len(ec.migrations) == 56
         assert ec.cost_migration == len(ec.migrations) * ec.M
         assert ec.migrations[0] == (72, 1263655469, 143787193)
-        assert ec.migrations[0] == (4946, 1213243701, 1412105351)
+        assert ec.migrations[-1] == (4946, 1213243701, 1412105351)
     def test_no_migration(self, ec):
         ec.run_no_migration()
         assert ec.get_cost() == 4995
