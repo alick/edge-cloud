@@ -4,7 +4,6 @@
 
 # defaultdict provides default values for missing keys
 from collections import defaultdict, deque
-from functools import partial
 import argparse
 import logging
 import sys
@@ -133,24 +132,10 @@ class EdgeCloud():
             # Find the service to be deleted.
             # It is the one in edge cloud with smallest sequece number for the
             # past 2M requests
-            svc_del = None
-            for svc in self.edge_services:
-                if len(seqnums[svc]) < 2*self.M:
-                    # We have not seen >= 2M requests from svc from beginning.
-                    # Set it to 0 so that we prefer it.
-                    seqnum_2M = 0
-                else:
-                    seqnum_2M = seqnums[svc][0]
-                # Initialize svc_del with the first service we encounter.
-                if svc_del is None:
-                    svc_del = svc
-                    svc_del_seq = seqnum_2M
-                    continue
-                if seqnum_2M < svc_del_seq:
-                    svc_del = svc
-                    svc_del_seq = seqnum_2M
+            # Build a list of tuples: (service, head of queue per service)
+            svc_tuples = [(s, seqnums[s][0]) for s in self.edge_services]
+            svc_del = min(svc_tuples, key=lambda x: x[1])[0]
             assert svc_del in self.edge_services
-            assert svc_del_seq < n
             # Run and record the migration and deletion.
             self.edge_services.remove(svc_del)
             self.edge_services.add(r)
