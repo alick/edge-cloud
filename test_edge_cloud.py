@@ -45,3 +45,7 @@ class TestEdgeCloud:
         assert ec.get_cost() == ec.cost
     def test_print_migrations(self, ec):
         pass
+    def test_float_M(self):
+        ec = EdgeCloud('traces/requests-job_id.dat', K=5, M=1.2, N=1000)
+        ec.run_RL()
+        assert True

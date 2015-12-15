@@ -8,6 +8,7 @@ from functools import partial
 import argparse
 import logging
 import sys
+import math
 
 
 class EdgeCloud():
@@ -27,7 +28,7 @@ class EdgeCloud():
         else:
             raise Exception('The parameter K should be a postive integer.')
         if M >= 1:
-            self.M = int(M)
+            self.M = float(M)
         else:
             raise Exception('The parameter M should be at least 1.')
         if N is None or N >= 1:
@@ -93,7 +94,8 @@ class EdgeCloud():
         # and j is not hosted by the edge cloud.
         b = defaultdict(int)
         # The sequence numbers of the most recent 2*M arrivals for all services
-        seqnums = defaultdict(partial(deque, maxlen=2*self.M))
+        seqnums = defaultdict(
+            lambda: deque([0]*2*math.ceil(self.M), maxlen=2*math.ceil(self.M)))
         # The sequence number of the latest migration for each service.
         seqnum_mig = defaultdict(int)
         # The sequence number of the latest deletion for each service.
@@ -222,7 +224,7 @@ if __name__ == '__main__':
     parser.add_argument('-K', dest='K', type=int, default=5,
                         help='number of services hosted by edge cloud '
                              '(default: 5)')
-    parser.add_argument('-M', dest='M', type=int, default=5,
+    parser.add_argument('-M', dest='M', type=float, default=5,
                         help='cost ratio of migration over forwarding '
                              '(default: 5)')
     parser.add_argument('-d', '--debug', dest='debug', action='store_true',
