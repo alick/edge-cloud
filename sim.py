@@ -204,7 +204,7 @@ class EdgeCloud():
         self.cost = self.cost_migration + self.cost_forwarding
 
     def print_migrations(self):
-        logging.debug('Time slot\tMigrated Service ID(s)\tDeleted Service ID(s)')
+        logging.debug('Sequence Number\tMigrated Service ID(s)\tDeleted Service ID(s)')
         for migration in self.migrations:
             time = migration[0]
             migrated = migration[1]
