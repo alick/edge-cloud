@@ -23,15 +23,15 @@ class EdgeCloud():
         file. Useful for debugging. Default is to use all requests.
         """
         if K >= 1:
-            self.K = K
+            self.K = int(K)
         else:
             raise Exception('The parameter K should be a postive integer.')
         if M >= 1:
-            self.M = M
+            self.M = int(M)
         else:
             raise Exception('The parameter M should be at least 1.')
         if N is None or N >= 1:
-            self.N = N
+            self.N = int(N)
         else:
             raise Exception('The parameter N should be '
                             'a postive integer or None.')
@@ -222,7 +222,7 @@ if __name__ == '__main__':
     parser.add_argument('-K', dest='K', type=int, default=5,
                         help='number of services hosted by edge cloud '
                              '(default: 5)')
-    parser.add_argument('-M', dest='M', type=float, default=5,
+    parser.add_argument('-M', dest='M', type=int, default=5,
                         help='cost ratio of migration over forwarding '
                              '(default: 5)')
     parser.add_argument('-d', '--debug', dest='debug', action='store_true',
