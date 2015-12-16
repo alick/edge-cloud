@@ -76,8 +76,49 @@ class EdgeCloud():
         self.requests_seen = []
 
     def run_belady(self):
+        """Bélády's algorithm or the clairvoyant algorithm.
+
+        The algorithm always migrate a missing service, and deletes
+        the existing service whose next occurrence is farthest in the
+        future.
+
+        The algorithm is offline optimal (OPT) in the cache (or page
+        placement) problem. It corresponds to the case of M = 1 in the
+        edge cloud problem.
+        """
         self.reset()
-        raise Exception('Unimplemented!')
+
+        # The sequence number of arrivals.
+        n = 0
+        for r in self.requests:
+            n += 1
+            logging.debug('n={}, request={}'.format(n, r))
+
+            migration = False
+            if r not in self.edge_services:
+                # r is not hosted. Migrate it.
+                migration = True
+            else:
+                # r is already hosted.
+                logging.debug('result: hosted')
+                continue
+            assert migration
+            # Find the service to be deleted.
+            # Note the [s] concatenated to self.requests is to avoid ValueError
+            # exception raised by list.index() when no such element is found.
+            svc_tuples = [(s, (self.requests + [s]).index(s, n))
+                          for s in self.edge_services]
+            svc_del = max(svc_tuples, key=lambda x: x[1])[0]
+            assert svc_del in self.edge_services
+            # Run and record the migration and deletion.
+            self.edge_services.remove(svc_del)
+            self.edge_services.add(r)
+            assert r in self.edge_services
+            assert svc_del not in self.edge_services
+            self.migrations.append((n, r, svc_del))
+            self.cost_migration += self.M
+            logging.debug('result: migrated. ({} deleted)'.format(svc_del))
+        self.cost = self.cost_migration + self.cost_forwarding
 
     def run_RL(self):
         """The RM-LRU (RL) Online algorithm.
@@ -216,6 +257,11 @@ if __name__ == '__main__':
                         help='enable debug (default: disabled)')
 
     args = parser.parse_args()
+    # If the floating point number represented in str aggs.M equals an integer,
+    # turn it into that integer for neat filename when debugging.
+    # (e.g. sim-M5.log instead sim-M5.0.log)
+    if args.M == int(args.M):
+        args.M = int(args.M)
 
     # Configure logging.
     if args.debug:
@@ -246,3 +292,5 @@ if __name__ == '__main__':
     logging.info('Total cost of offline static: {}.'.format(ec.get_cost()))
 
     ec.run_belady()
+    ec.print_migrations()
+    logging.info('Total cost of Bélády: {}.'.format(ec.get_cost()))
