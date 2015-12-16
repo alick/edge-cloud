@@ -203,9 +203,6 @@ class EdgeCloud():
         assert self.cost_migration == 0
         self.cost = self.cost_forwarding
 
-    def get_cost(self):
-        return self.cost
-
     def run_static(self):
         """Offline static algorithm.
 
@@ -240,6 +237,16 @@ class EdgeCloud():
             migrated = migration[1]
             deleted = migration[2]
             logging.debug(format_str.format(time, migrated, deleted))
+
+    def get_cost(self):
+        """Get the cost of the algorithm runned.
+
+        This serves as the public API, and should be used instead of
+        directly accessing the attribute.
+
+        :return total cost (migration plus forwarding) of the algorithm
+        """
+        return self.cost
 
 
 if __name__ == '__main__':
