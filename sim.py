@@ -226,21 +226,23 @@ if __name__ == '__main__':
                 args.N, args.K, args.M),
             filemode='w')
     else:
-        logging.basicConfig(level=logging.INFO,
-            stream=sys.stdout, format='%(message)s')
+        logging.basicConfig(
+            level=logging.INFO,
+            stream=sys.stdout,
+            format='%(message)s')
 
     ec = EdgeCloud('traces/requests-job_id.dat', K=args.K, M=args.M,
                    N=args.N)
 
     ec.run_RL()
     ec.print_migrations()
-    logging.info('Total cost for RL online algorithm: {}.'.format(ec.get_cost()))
+    logging.info('Total cost of RL: {}.'.format(ec.get_cost()))
 
     ec.run_no_migration()
-    logging.info('Total cost with no migration: {}.'.format(ec.get_cost()))
+    logging.info('Total cost of no migration: {}.'.format(ec.get_cost()))
 
     ec.run_static()
     ec.print_migrations()
-    logging.info('Total cost for offline static algorithm: {}.'.format(ec.get_cost()))
+    logging.info('Total cost of offline static: {}.'.format(ec.get_cost()))
 
     ec.run_belady()
