@@ -381,20 +381,20 @@ if __name__ == '__main__':
                    N=args.N)
 
     ec.run_no_migration()
-    logging.info('Total cost of no migration: {}.'.format(ec.get_cost()))
+    logging.info('Total cost of no migration: {}'.format(ec.get_cost()))
 
     ec.run_static()
     ec.print_migrations()
-    logging.info('Total cost of offline static: {}.'.format(ec.get_cost()))
+    logging.info('Total cost of offline static: {}'.format(ec.get_cost()))
 
     if ec.N <= 10000 or args.debug:
         ec.run_RL()
         ec.print_migrations()
-        logging.info('Total cost of RL: {}.'.format(ec.get_cost()))
+        logging.info('Total cost of RL: {}'.format(ec.get_cost()))
 
         ec.run_belady()
         ec.print_migrations()
-        logging.info('Total cost of Bélády: {}.'.format(ec.get_cost()))
+        logging.info('Total cost of Bélády: {}'.format(ec.get_cost()))
 
         ec.run_belady(modified=True)
         ec.print_migrations()
@@ -402,7 +402,7 @@ if __name__ == '__main__':
 
         ec.run_offline_opt()
         ec.print_migrations()
-        logging.info('Total cost of OPT: {}.'.format(ec.get_cost()))
+        logging.info('Total cost of OPT: {}'.format(ec.get_cost()))
     else:
-        logging.info('RL, Bélády, OPT skipped '
+        logging.info('RL, Bélády, OPT were skipped '
                      'as they can be too time consuming.')
