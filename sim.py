@@ -80,16 +80,21 @@ class EdgeCloud():
         # Count the times the offline_opt_recursion function is called.
         self.offline_opt_recursion_cnt = 0
 
-    def run_belady(self):
+    def run_belady(self, modified=False):
         """Bélády's algorithm or the clairvoyant algorithm.
 
-        The algorithm always migrate a missing service, and deletes
-        the existing service whose next occurrence is farthest in the
-        future.
+        The (unmodified) algorithm always migrate a missing service,
+        and deletes the existing service whose next occurrence is
+        farthest in the future. It is offline optimal (OPT) in the
+        cache (or page placement) problem, where the forwarding cost
+        is infinity, and the migration cost (M) is one.
 
-        The algorithm is offline optimal (OPT) in the cache (or page
-        placement) problem. It corresponds to the case of M = 1 in the
-        edge cloud problem.
+        The modified version will forward the missing service, if its
+        next occurrence is farther than those in the edge services.
+        It should have the same cost performance as the offline optimal
+        solution when the migration cost (M) is one. (But it might not
+        the same as the offline optimal (OPT), since it might not have
+        the most times of migrations.
         """
         self.reset()
 
@@ -111,18 +116,23 @@ class EdgeCloud():
             # Find the service to be deleted.
             # Note the [s] concatenated to self.requests is to avoid ValueError
             # exception raised by list.index() when no such element is found.
+            if modified:
+                self.edge_services.add(r)
             svc_tuples = [(s, (self.requests + [s]).index(s, n))
                           for s in self.edge_services]
             svc_del = max(svc_tuples, key=lambda x: x[1])[0]
             assert svc_del in self.edge_services
             # Run and record the migration and deletion.
             self.edge_services.remove(svc_del)
-            self.edge_services.add(r)
-            assert r in self.edge_services
-            assert svc_del not in self.edge_services
-            self.migrations.append((n, r, svc_del))
-            self.cost_migration += self.M
-            logging.debug('result: migrated. ({} deleted)'.format(svc_del))
+            if r != svc_del:
+                self.edge_services.add(r)
+                self.migrations.append((n, r, svc_del))
+                self.cost_migration += self.M
+                logging.debug('result: migrated. ({} deleted)'.format(svc_del))
+            else:
+                assert modified
+                self.cost_forwarding += 1
+                logging.debug('result: forwarded'.format(r))
         self.cost = self.cost_migration + self.cost_forwarding
 
     def run_RL(self):
@@ -385,6 +395,10 @@ if __name__ == '__main__':
         ec.run_belady()
         ec.print_migrations()
         logging.info('Total cost of Bélády: {}.'.format(ec.get_cost()))
+
+        ec.run_belady(modified=True)
+        ec.print_migrations()
+        logging.info('Total cost of Bélády Modified: {}'.format(ec.get_cost()))
 
         ec.run_offline_opt()
         ec.print_migrations()

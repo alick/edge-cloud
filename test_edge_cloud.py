@@ -36,6 +36,14 @@ class TestEdgeCloud:
         assert ec.cost_forwarding == 0
         assert ec.cost == ec.cost_migration == len(ec.migrations) * ec.M
 
+    def test_belady_modified(self, ec):
+        ec = EdgeCloud('traces/requests-job_id.dat', K=1, M=1, N=10)
+        ec.run_belady(modified=True)
+        assert ec.get_cost() == 8
+        assert len(ec.migrations) == 3
+        assert ec.migrations[0][0] == 2
+        assert ec.cost_forwarding > 0
+
     def test_RL(self, ec):
         ec.run_RL()
         assert ec.get_cost() == 2566
