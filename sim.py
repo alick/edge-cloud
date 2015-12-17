@@ -266,6 +266,17 @@ class EdgeCloud():
                           .format(log_indent, svc_tuple[0]))
         return cost_mig_opt
 
+    def run_offline_iterative(self):
+        """Offline iterative algorithm.
+
+        The algorithm runs offline optimal algorithm iteratively, each time
+        considering one more space for services in the edge cloud.
+        """
+        if self.K == 1:
+            self.run_offline_opt()
+            return
+        raise Error('Unimplemented!')
+
     def run_no_migration(self):
         self.reset()
         # If no migration happens...
