@@ -290,10 +290,6 @@ if __name__ == '__main__':
     ec = EdgeCloud('traces/requests-job_id.dat', K=args.K, M=args.M,
                    N=args.N)
 
-    ec.run_RL()
-    ec.print_migrations()
-    logging.info('Total cost of RL: {}.'.format(ec.get_cost()))
-
     ec.run_no_migration()
     logging.info('Total cost of no migration: {}.'.format(ec.get_cost()))
 
@@ -301,6 +297,14 @@ if __name__ == '__main__':
     ec.print_migrations()
     logging.info('Total cost of offline static: {}.'.format(ec.get_cost()))
 
-    ec.run_belady()
-    ec.print_migrations()
-    logging.info('Total cost of Bélády: {}.'.format(ec.get_cost()))
+    if ec.N <= 10000 or args.debug:
+        ec.run_RL()
+        ec.print_migrations()
+        logging.info('Total cost of RL: {}.'.format(ec.get_cost()))
+
+        ec.run_belady()
+        ec.print_migrations()
+        logging.info('Total cost of Bélády: {}.'.format(ec.get_cost()))
+    else:
+        logging.info('RL, Bélády skipped '
+                     'as they can be too time consuming.')
