@@ -55,6 +55,13 @@ class TestEdgeCloud:
         migration = ec.migrations[0]
         assert len(migration[1]) == 5 == len(migration[2])
 
+    def test_offline_opt(self, ec):
+        ec = EdgeCloud('traces/requests-job_id.dat', K=1, M=1, N=10)
+        ec.run_offline_opt()
+        assert ec.get_cost() == 8
+        assert len(ec.migrations) == 5
+        assert ec.migrations[0][0] == 2
+
     def test_get_cost(self, ec):
         assert ec.get_cost() == ec.cost
 

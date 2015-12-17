@@ -77,6 +77,8 @@ class EdgeCloud():
         self.cost = 0
         self.migrations = []
         self.requests_seen = []
+        # Count the times the offline_opt_recursion function is called.
+        self.offline_opt_recursion_cnt = 0
 
     def run_belady(self):
         """Bélády's algorithm or the clairvoyant algorithm.
@@ -197,6 +199,73 @@ class EdgeCloud():
             seqnum_del[svc_del] = n
         self.cost = self.cost_migration + self.cost_forwarding
 
+    def run_offline_opt(self):
+        """Offline optimal (OPT) algorithm.
+
+        The algorithm calls the offline_opt_recursion routine to find the
+        optimal solution. Its time complexity is roughly O(K^N).
+        """
+
+        self.reset()
+
+        if self.K > 2 or self.N > 17:
+            logging.warning('Algorithm can be very time and memory consuming!')
+
+        (self.cost, self.migrations) = self.offline_opt_recursion(
+            n=1,
+            edge_services=self.edge_services)
+
+        logging.debug('Function offline_opt_recursion() was called {} times.'
+                      .format(self.offline_opt_recursion_cnt))
+
+    def offline_opt_recursion(self, n, edge_services):
+        """Offline optimal (OPT) recursive routine.
+
+        :param n: sequece number of request arrival
+        :param edge_services: the edge_services before n-th arrival
+        :return (cost, migrations)
+        """
+        self.offline_opt_recursion_cnt += 1
+
+        # When all requests have been processed.
+        if (n > self.N):
+            return (0, [])
+
+        # Otherwise, deal with the n-th arrival.
+        # Note that Python lists count from 0.
+        r = self.requests[n - 1]
+        log_indent = ' '*(n - 1)  # to show the recusion level
+        logging.debug('{}n={}, r={}'.format(log_indent, n, r))
+        if r in edge_services:
+            logging.debug('result: hosted')
+            return self.offline_opt_recursion(n+1, edge_services)
+        assert r not in edge_services
+        svc_tuples = []  # a list of (service to be deleted, cost)
+        # Find cost of migrating r & deleting k-th service in edge_services
+        for s in edge_services:
+            es = edge_services.copy()
+            es.remove(s)
+            es.add(r)
+            (c, m) = self.offline_opt_recursion(n + 1, es)
+            cost = self.M + c
+            migrations = [(n, r, s)] + m
+            svc_tuples.append((s, cost, migrations))
+        # Find cost of forwarding r, no migration
+        (c, m) = self.offline_opt_recursion(n + 1, edge_services)
+        svc_tuples.append((0, 1 + c, m))  # 0 is a fake service ID
+        # Find the one with minimum cost.
+        # If tie: select the one with maximum migrations,
+        # If still tie: select the one with lowest ID.
+        svc_tuple = min(svc_tuples, key=lambda x: (x[1], -len(x[2]), x[0]))
+        cost_mig_opt = (svc_tuple[1], svc_tuple[2])
+        if svc_tuple[0] == 0:
+            # forwarding, no migration
+            logging.debug('{}result: forwarded'.format(log_indent))
+        else:
+            logging.debug('{}result: migrated ({} deleted)'
+                          .format(log_indent, svc_tuple[0]))
+        return cost_mig_opt
+
     def run_no_migration(self):
         self.reset()
         # If no migration happens...
@@ -305,6 +374,10 @@ if __name__ == '__main__':
         ec.run_belady()
         ec.print_migrations()
         logging.info('Total cost of Bélády: {}.'.format(ec.get_cost()))
+
+        ec.run_offline_opt()
+        ec.print_migrations()
+        logging.info('Total cost of OPT: {}.'.format(ec.get_cost()))
     else:
-        logging.info('RL, Bélády skipped '
+        logging.info('RL, Bélády, OPT skipped '
                      'as they can be too time consuming.')
