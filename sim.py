@@ -30,7 +30,9 @@ class EdgeCloud():
             self.M = float(M)
         else:
             raise Exception('The parameter M should be at least 1.')
-        if N is None or N >= 1:
+        if N is None:
+            self.N = None
+        elif N >= 1:
             self.N = int(N)
         else:
             raise Exception('The parameter N should be '
@@ -41,12 +43,13 @@ class EdgeCloud():
                 for line in f:
                     r = int(line)  # one request specified by its service id
                     self.requests.append(r)
+                self.N = len(self.requests)
             else:
                 for x in range(self.N):
                     line = next(f)
                     r = int(line)
                     self.requests.append(r)
-        logging.debug('# services: {0}'.format(len(self.requests)))
+        logging.debug('# services: {0}'.format(self.N))
 
         requests_cnt = defaultdict(int)  # a dict with default integer value 0
         for r in self.requests:
@@ -224,7 +227,7 @@ class EdgeCloud():
         for r in self.requests:
             if r not in self.edge_services:
                 self.cost_forwarding += 1
-        assert self.cost_forwarding == len(self.requests) - sum(
+        assert self.cost_forwarding == self.N - sum(
             x[1] for x in self.sorted_requests_cnt[0:self.K])
         self.cost = self.cost_migration + self.cost_forwarding
 
