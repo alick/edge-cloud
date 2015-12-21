@@ -8,6 +8,7 @@ import argparse
 import logging
 import sys
 import math
+import itertools
 
 
 class EdgeCloud():
@@ -49,12 +50,10 @@ class EdgeCloud():
                     line = next(f)
                     r = int(line)
                     self.requests.append(r)
-        logging.debug('# services: {0}'.format(self.N))
 
         requests_cnt = defaultdict(int)  # a dict with default integer value 0
         for r in self.requests:
             requests_cnt[r] += 1
-        logging.debug('# unique services: {0}'.format(len(requests_cnt)))
 
         # The requests sorted by values and then keys.
         self.sorted_requests_cnt = sorted(
@@ -64,6 +63,21 @@ class EdgeCloud():
 
         # The requests sorted by keys (IDs) in ascending order.
         self.sorted_requests = sorted(requests_cnt.keys())
+
+        # Set of all possible services.
+        self.services = set(self.sorted_requests)
+        assert len(self.services) == len(requests_cnt)
+
+        logging.info('No. requests: N={0}'.format(self.N))
+        logging.info('No. unique services: |S|={0}'.format(len(requests_cnt)))
+        logging.info('No. edge services: K={0}'.format(self.K))
+        logging.info('Cost ratio: M={0}'.format(self.M))
+
+        # Python 3.5 offers math.inf, which is euqivalent to float('inf').
+        try:
+            math.inf
+        except AttributeError:
+            math.inf = float('inf')
 
         self.reset()
 
@@ -79,6 +93,10 @@ class EdgeCloud():
         self.requests_seen = []
         # Count the times the offline_opt_recursion function is called.
         self.offline_opt_recursion_cnt = 0
+        # Lookup table (LUT) of the offline_opt_recursion function.
+        self.offline_opt_recursion_lut = defaultdict(lambda: (-1, []))
+        # Count the times of LUT hits.
+        self.offline_opt_recursion_lut_cnt = 0
 
     def run_belady(self, modified=False):
         """Bélády's algorithm or the clairvoyant algorithm.
@@ -218,63 +236,92 @@ class EdgeCloud():
 
         self.reset()
 
-        if self.K > 2 or self.N > 17:
+        # Whether to record n in the debug log to indicate the progress.
+        log_n = False
+        if self.K > 2 or self.N > 1000:
+            log_n = True
             logging.warning('Algorithm can be very time and memory consuming!')
 
-        (self.cost, self.migrations) = self.offline_opt_recursion(
-            n=1,
-            edge_services=self.edge_services)
+        svc_tuples = []
+        # Pre-calculate offline_opt_recursion(n, es) for all n in 1:N-1 and all
+        # possible set of edge services, so that LUT caches the intermediate
+        # results.
+        for n in range(self.N):
+            if log_n:
+                logging.debug('n={}'.format(n))
+            for es in itertools.combinations(self.services, self.K):
+                self.offline_opt_recursion(n=n, edge_services=set(es))
+        for es in itertools.combinations(self.services, self.K):
+            svc_tuples.append(self.offline_opt_recursion(
+                n=self.N,
+                edge_services=set(es)))
+        (self.cost, self.migrations) = min(
+            svc_tuples, key=lambda x: (x[0], -len(x[1])))
 
         logging.debug('Function offline_opt_recursion() was called {} times.'
                       .format(self.offline_opt_recursion_cnt))
+        logging.debug('LUT was hit {} times.'
+                      .format(self.offline_opt_recursion_lut_cnt))
 
     def offline_opt_recursion(self, n, edge_services):
         """Offline optimal (OPT) recursive routine.
 
         :param n: sequece number of request arrival
-        :param edge_services: the edge_services before n-th arrival
+        :param edge_services: the edge_services after the n-th arrival
         :return (cost, migrations)
         """
         self.offline_opt_recursion_cnt += 1
+        # First, check whether it has been calculated before.
+        # The key of LUT is a tuple of the sequece number followed by all the
+        # edge services sorted by their IDs in the ascending order.
+        # The value is a tuple of the cost calculated, followed by the list of
+        # corresponding migrations.
+        key = (n, tuple(sorted(edge_services)))
+        if (self.offline_opt_recursion_lut[key])[0] >= 0:
+            self.offline_opt_recursion_lut_cnt += 1
+            return self.offline_opt_recursion_lut[key]
 
-        # When all requests have been processed.
-        if (n > self.N):
-            return (0, [])
+        # Initial cost is zero with predefined edge_services, otherwise
+        # mark it infinity.
+        if (n <= 0):
+            if edge_services == self.edge_services:
+                res = (0, [])
+            else:
+                res = (math.inf, [])
+            self.offline_opt_recursion_lut[key] = res
+            return res
 
-        # Otherwise, deal with the n-th arrival.
+        # Otherwise, deal with the n-th (n >= 1) arrival.
         # Note that Python lists count from 0.
         r = self.requests[n - 1]
-        log_indent = ' '*(n - 1)  # to show the recusion level
-        logging.debug('{}n={}, r={}'.format(log_indent, n, r))
-        if r in edge_services:
-            logging.debug('result: hosted')
-            return self.offline_opt_recursion(n+1, edge_services)
-        assert r not in edge_services
+        if r not in edge_services:
+            # forwarding, no migration
+            (c, m) = self.offline_opt_recursion(n - 1, edge_services)
+            res = (c + 1, m)
+            self.offline_opt_recursion_lut[key] = res
+            return res
+        assert r in edge_services
         svc_tuples = []  # a list of (service to be deleted, cost)
-        # Find cost of migrating r & deleting k-th service in edge_services
-        for s in edge_services:
+        # Find cost of migrating r & deleting one service in previous
+        # configuration.
+        for s in self.services - edge_services:
             es = edge_services.copy()
-            es.remove(s)
-            es.add(r)
-            (c, m) = self.offline_opt_recursion(n + 1, es)
+            es.remove(r)
+            es.add(s)
+            (c, m) = self.offline_opt_recursion(n - 1, es)
             cost = self.M + c
-            migrations = [(n, r, s)] + m
+            migrations = m + [(n, r, s)]
             svc_tuples.append((s, cost, migrations))
-        # Find cost of forwarding r, no migration
-        (c, m) = self.offline_opt_recursion(n + 1, edge_services)
-        svc_tuples.append((0, 1 + c, m))  # 0 is a fake service ID
+        # Find cost of hosting r
+        (c, m) = self.offline_opt_recursion(n - 1, edge_services)
+        svc_tuples.append((0, c, m))  # 0 is a fake service ID
         # Find the one with minimum cost.
         # If tie: select the one with maximum migrations,
         # If still tie: select the one with lowest ID.
         svc_tuple = min(svc_tuples, key=lambda x: (x[1], -len(x[2]), x[0]))
-        cost_mig_opt = (svc_tuple[1], svc_tuple[2])
-        if svc_tuple[0] == 0:
-            # forwarding, no migration
-            logging.debug('{}result: forwarded'.format(log_indent))
-        else:
-            logging.debug('{}result: migrated ({} deleted)'
-                          .format(log_indent, svc_tuple[0]))
-        return cost_mig_opt
+        res = (svc_tuple[1], svc_tuple[2])
+        self.offline_opt_recursion_lut[key] = res
+        return res
 
     def run_offline_iterative(self):
         """Offline iterative algorithm.
