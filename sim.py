@@ -26,7 +26,7 @@ class EdgeCloud():
         if K >= 1:
             self.K = int(K)
         else:
-            raise Exception('The parameter K should be a postive integer.')
+            raise Exception('The parameter K should be a positive integer.')
         if M >= 1:
             self.M = float(M)
         else:
@@ -37,7 +37,7 @@ class EdgeCloud():
             self.N = int(N)
         else:
             raise Exception('The parameter N should be '
-                            'a postive integer or None.')
+                            'a positive integer or None.')
         self.requests = []
         with open(path_to_file, 'r') as f:
             if self.N is None:
@@ -73,7 +73,7 @@ class EdgeCloud():
         logging.info('No. edge services: K={0}'.format(self.K))
         logging.info('Cost ratio: M={0}'.format(self.M))
 
-        # Python 3.5 offers math.inf, which is euqivalent to float('inf').
+        # Python 3.5 offers math.inf, which is equivalent to float('inf').
         try:
             math.inf
         except AttributeError:
@@ -204,7 +204,7 @@ class EdgeCloud():
                 continue
             assert migration is True
             # Find the service to be deleted.
-            # It is the one in edge cloud with smallest sequece number for the
+            # It is the one in edge cloud with smallest sequence number for the
             # past 2M requests
             # Build a list of tuples: (service, head of queue per service)
             svc_tuples = [(s, seqnums[s][0]) for s in self.edge_services]
@@ -265,13 +265,13 @@ class EdgeCloud():
     def offline_opt_recursion(self, n, edge_services):
         """Offline optimal (OPT) recursive routine.
 
-        :param n: sequece number of request arrival
+        :param n: sequence number of request arrival
         :param edge_services: the edge_services after the n-th arrival
         :return (cost, migrations)
         """
         self.offline_opt_recursion_cnt += 1
         # First, check whether it has been calculated before.
-        # The key of LUT is a tuple of the sequece number followed by all the
+        # The key of LUT is a tuple of the sequence number followed by all the
         # edge services sorted by their IDs in the ascending order.
         # The value is a tuple of the cost calculated, followed by the list of
         # corresponding migrations.
@@ -378,7 +378,7 @@ class EdgeCloud():
             logging.debug(format_str.format(time, migrated, deleted))
 
     def get_cost(self):
-        """Get the cost of the algorithm runned.
+        """Get the cost of the algorithm.
 
         This serves as the public API, and should be used instead of
         directly accessing the attribute.
@@ -403,7 +403,7 @@ if __name__ == '__main__':
                         help='enable debug (default: disabled)')
 
     args = parser.parse_args()
-    # If the floating point number represented in str aggs.M equals an integer,
+    # If the floating point number represented in str args.M equals an integer,
     # turn it into that integer for neat filename when debugging.
     # (e.g. sim-M5.log instead sim-M5.0.log)
     if args.M == int(args.M):
