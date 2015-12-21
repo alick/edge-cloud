@@ -242,21 +242,20 @@ class EdgeCloud():
             log_n = True
             logging.warning('Algorithm can be very time and memory consuming!')
 
-        svc_tuples = []
         # Pre-calculate offline_opt_recursion(n, es) for all n in 1:N-1 and all
         # possible set of edge services, so that LUT caches the intermediate
         # results.
-        for n in range(self.N):
+        for n in range(self.N + 1):
             if log_n:
                 logging.debug('n={}'.format(n))
             for es in itertools.combinations(self.services, self.K):
                 self.offline_opt_recursion(n=n, edge_services=set(es))
-        for es in itertools.combinations(self.services, self.K):
-            svc_tuples.append(self.offline_opt_recursion(
-                n=self.N,
-                edge_services=set(es)))
-        (self.cost, self.migrations) = min(
-            svc_tuples, key=lambda x: (x[0], -len(x[1])))
+        cost_mig_tuples = []
+        for key in self.offline_opt_recursion_lut.keys():
+            if key[0] == self.N:
+                cost_mig_tuples.append(self.offline_opt_recursion_lut[key])
+        (self.cost, self.migrations) = min(cost_mig_tuples,
+                                           key=lambda x: (x[0], -len(x[1])))
 
         logging.debug('Function offline_opt_recursion() was called {} times.'
                       .format(self.offline_opt_recursion_cnt))
