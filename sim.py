@@ -9,6 +9,7 @@ import logging
 import sys
 import math
 import itertools
+import numpy as np
 
 
 class EdgeCloud():
@@ -328,10 +329,135 @@ class EdgeCloud():
         The algorithm runs offline optimal algorithm iteratively, each time
         considering one more space for services in the edge cloud.
         """
+        self.reset()
+        # LUT for offline_iterative_cost function.
+        self.offline_iterative_cost_lut = defaultdict(lambda: (-1, []))
+        self.offline_iterative_cost_lut_cnt = 0
+        # Matrix whose (k, n)-th element denotes the edge service in k-th
+        # position after n-th arrival.
+        self.edge_services_matrix = np.zeros((self.K, self.N + 1),
+                                             dtype=np.uint32)
+        self.edge_services_matrix[:, 0] = sorted(self.edge_services)
+
         if self.K == 1:
             self.run_offline_opt()
             return
-        raise Error('Unimplemented!')
+
+        assert self.K > 1
+
+        # Run offline_opt_recursion while assuming K = 1.
+        K_orig = self.K
+        self.K = 1
+        # Note the reset() in the beginning of run_offline_opt() will reset
+        # self.edge_services to be a 1-element set.
+        self.run_offline_opt()
+        self.migrations_to_services(self.migrations, k=1)
+        self.K = K_orig
+        self.reset()
+
+        for k in range(2, self.K + 1):
+            for n in range(self.N + 1):
+                for s in self.services:
+                    self.offline_iterative_cost(k, n, s)
+            c_e_tuples = []
+            for key in self.offline_iterative_cost_lut.keys():
+                if key[0] == k and key[1] == self.N:
+                    c_e_tuples.append(
+                        self.offline_iterative_cost_lut[key])
+            (c, e) = min(c_e_tuples, key=lambda x: (x[0], x[1][-1]))
+            self.edge_services_matrix[k - 1, :] = e
+        if self.N <= 4:
+            logging.debug('matrix=\n{}'.format(self.edge_services_matrix))
+        # Note that a service might appear in more than one unit of storage.
+        # The eventual migration events need to be calculated after all
+        # storage are considered.
+        edge_services_prev = set(self.edge_services_matrix[:, 0])
+        assert edge_services_prev == self.edge_services
+        for n in range(1, self.N + 1):
+            edge_services_cur = set(self.edge_services_matrix[:, n])
+            edge_services_migrated = edge_services_cur - edge_services_prev
+            edge_services_deleted = edge_services_prev - edge_services_cur
+            if len(edge_services_migrated) or len(edge_services_deleted):
+                self.migrations.append((
+                    n,
+                    self.fmt_svc_set(edge_services_migrated),
+                    self.fmt_svc_set(edge_services_deleted)))
+            # Migrations should be at most once at a time.
+            if len(edge_services_migrated) > 1:
+                logging.warning('I cannot believe it!')
+                logging.warning('n={}'.format(n))
+            self.cost_migration += len(edge_services_migrated) * self.M
+            if self.requests[n - 1] not in edge_services_cur:
+                self.cost_forwarding += 1
+            edge_services_prev = edge_services_cur
+        self.cost = self.cost_migration + self.cost_forwarding
+
+    def migrations_to_services(self, m, k):
+        """Turn migration events to an edge service chain in the matrix.
+
+        :param m: list of migrations [(n, r, s), ...]
+        :param k: the position of service in the edge cloud storage (1..K)
+        :return [(es), ...] edge services per arrival (0 to N)
+        """
+        begin = 1
+        # NumPy arrays count from 0.
+        prev_svc = self.edge_services_matrix[k - 1, 0]
+        for (n, r, s) in self.migrations:
+            self.edge_services_matrix[k - 1, begin:n] = prev_svc
+            begin = n
+            prev_svc = r
+        self.edge_services_matrix[k - 1, begin:] = prev_svc
+
+    def offline_iterative_cost(self, k, n, s):
+        """Calculate the cost of offline iterative algorithm recursively.
+
+        :param k: position of the service s in the edge cloud storage (1..K)
+        :param n: sequence number of the request arrival
+        :param s: newly added edge service
+        :return (cost, edge_service_chain)
+                  minimum cost after the n-th arrival and the
+                  corresponding edge service chain from the start (0-th
+                  arrival) to the n-th arrival (inclusive), given that
+                  L_k stores the service s after the n-th arrival.
+        """
+
+        # Use the LUT.
+        key = (k, n, s)
+        if (self.offline_iterative_cost_lut[key])[0] >= 0:
+            self.offline_iterative_cost_lut_cnt += 1
+            return self.offline_iterative_cost_lut[key]
+
+        if (n <= 0):
+            if s == self.edge_services_matrix[k - 1, 0]:
+                res = (0, [s])
+            else:
+                res = (math.inf, [s])
+            self.offline_iterative_cost_lut[key] = res
+            return res
+
+        r = self.requests[n - 1]
+        if s != r:
+            # r is forwarded if r is not in storage 1 to k-1,
+            # otherwise r is hosted for sure.
+            # In both cases, s should be here after the previous arrival,
+            # and stay here after the n-th arrival.
+            (c, e) = self.offline_iterative_cost(k, n - 1, s)
+            if r not in self.edge_services_matrix[0:k - 1, n]:
+                c += 1
+            res = (c, e + [s])
+            self.offline_iterative_cost_lut[key] = res
+            return res
+        assert r == s
+        # Now we know s is the same as r, which means s was here after (n-1)-th
+        # arrival already, or there is a migration after n-th arrival.
+        [c, e] = self.offline_iterative_cost(k, n - 1, s)
+        svc_tuples = [(c, e + [s])]
+        for svc in self.services - set([s]):
+            (c, e) = self.offline_iterative_cost(k, n - 1, svc)
+            svc_tuples.append((c + self.M, e + [svc]))
+        res = min(svc_tuples, key=lambda x: (x[0], x[1][-1]))
+        self.offline_iterative_cost_lut[key] = res
+        return res
 
     def run_no_migration(self):
         self.reset()
@@ -376,6 +502,13 @@ class EdgeCloud():
             migrated = migration[1]
             deleted = migration[2]
             logging.debug(format_str.format(time, migrated, deleted))
+
+    def fmt_svc_set(self, svc_set):
+        res = tuple(svc_set)
+        if len(res) == 1:
+            return int(res[0])
+        else:
+            return res
 
     def get_cost(self):
         """Get the cost of the algorithm.
@@ -445,6 +578,11 @@ if __name__ == '__main__':
         ec.run_belady(modified=True)
         ec.print_migrations()
         logging.info('Total cost of Bélády Modified: {}'.format(ec.get_cost()))
+
+        ec.run_offline_iterative()
+        ec.print_migrations()
+        logging.info('Total cost of Offline Iterative: {}'
+                     .format(ec.get_cost()))
 
         ec.run_offline_opt()
         ec.print_migrations()

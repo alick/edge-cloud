@@ -73,9 +73,20 @@ class TestEdgeCloud:
     def test_offline_iterative(self, ec):
         ec = EdgeCloud('traces/requests-job_id.dat', K=1, M=1, N=10)
         ec.run_offline_iterative()
+        # Same as run_offline_opt()
         assert ec.get_cost() == 8
         assert len(ec.migrations) == 5
         assert ec.migrations[0][0] == 2
+        ec2 = EdgeCloud('traces/requests-job_id.dat', K=4, M=1, N=4)
+        ec2.run_offline_iterative()
+        assert ec2.get_cost() == 0
+        assert len(ec2.migrations) == 1
+        assert ec2.migrations[0][0] == 2
+        ec3 = EdgeCloud('traces/requests-job_id.dat', K=2, M=1, N=15)
+        ec3.run_offline_iterative()
+        assert ec3.get_cost() == 12
+        assert len(ec3.migrations) == 11
+        assert ec3.migrations[0][0] == 2
 
     def test_get_cost(self, ec):
         assert ec.get_cost() == ec.cost
