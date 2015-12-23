@@ -138,7 +138,7 @@ class EdgeCloud():
                 self.edge_services.add(r)
             svc_tuples = [(s, (self.requests + [s]).index(s, n))
                           for s in self.edge_services]
-            svc_del = max(svc_tuples, key=lambda x: x[1])[0]
+            svc_del = max(svc_tuples, key=lambda x: (x[1], x[0]))[0]
             assert svc_del in self.edge_services
             # Run and record the migration and deletion.
             self.edge_services.remove(svc_del)
@@ -208,7 +208,7 @@ class EdgeCloud():
             # past 2M requests
             # Build a list of tuples: (service, head of queue per service)
             svc_tuples = [(s, seqnums[s][0]) for s in self.edge_services]
-            svc_del = min(svc_tuples, key=lambda x: x[1])[0]
+            svc_del = min(svc_tuples, key=lambda x: (x[1], x[0]))[0]
             assert svc_del in self.edge_services
             # Run and record the migration and deletion.
             self.edge_services.remove(svc_del)
