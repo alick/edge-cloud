@@ -351,23 +351,7 @@ class EdgeCloud():
                                              dtype=np.uint32)
         self.edge_services_matrix[:, 0] = sorted(self.edge_services)
 
-        if self.K == 1:
-            self.run_offline_opt()
-            return
-
-        assert self.K > 1
-
-        # Run offline_opt_recursion while assuming K = 1.
-        K_orig = self.K
-        self.K = 1
-        # Note the reset() in the beginning of run_offline_opt() will reset
-        # self.edge_services to be a 1-element set.
-        self.run_offline_opt()
-        self.migrations_to_services(self.migrations, k=1)
-        self.K = K_orig
-        self.reset()
-
-        for k in range(2, self.K + 1):
+        for k in range(1, self.K + 1):
             for n in range(self.N + 1):
                 for s in self.services:
                     self.offline_iterative_cost(k, n, s)
@@ -409,22 +393,6 @@ class EdgeCloud():
                 self.cost_forwarding += 1
             edge_services_prev = edge_services_cur
         self.cost = self.cost_migration + self.cost_forwarding
-
-    def migrations_to_services(self, m, k):
-        """Turn migration events to an edge service chain in the matrix.
-
-        :param m: list of migrations [(n, r, s), ...]
-        :param k: the position of service in the edge cloud storage (1..K)
-        :return [(es), ...] edge services per arrival (0 to N)
-        """
-        begin = 1
-        # NumPy arrays count from 0.
-        prev_svc = self.edge_services_matrix[k - 1, 0]
-        for (n, r, s) in self.migrations:
-            self.edge_services_matrix[k - 1, begin:n] = prev_svc
-            begin = n
-            prev_svc = r
-        self.edge_services_matrix[k - 1, begin:] = prev_svc
 
     def offline_iterative_cost(self, k, n, s):
         """Calculate the cost of offline iterative algorithm recursively.
