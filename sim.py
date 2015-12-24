@@ -55,6 +55,8 @@ class EdgeCloud():
         requests_cnt = defaultdict(int)  # a dict with default integer value 0
         for r in self.requests:
             requests_cnt[r] += 1
+        # Number of unique services requested.
+        self.N_unique = len(requests_cnt)
 
         # The requests sorted by values and then keys.
         self.sorted_requests_cnt = sorted(
@@ -67,10 +69,14 @@ class EdgeCloud():
 
         # Set of all possible services.
         self.services = set(self.sorted_requests)
-        assert len(self.services) == len(requests_cnt)
+        assert len(self.services) == self.N_unique
+
+        if self.N_unique <= self.K:
+            logging.warning('WARN: Storage can hold all possible services!')
+            self.K = self.N_unique
 
         logging.info('No. requests: N={0}'.format(self.N))
-        logging.info('No. unique services: |S|={0}'.format(len(requests_cnt)))
+        logging.info('No. unique services: |S|={0}'.format(self.N_unique))
         logging.info('No. edge services: K={0}'.format(self.K))
         logging.info('Cost ratio: M={0}'.format(self.M))
 
