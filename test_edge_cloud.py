@@ -85,8 +85,9 @@ class TestEdgeCloud:
         ec3 = EdgeCloud('traces/requests-job_id.dat', K=2, M=1, N=15)
         ec3.run_offline_iterative()
         assert ec3.get_cost() == 12
-        assert len(ec3.migrations) == 11
+        assert len(ec3.migrations) == 13
         assert ec3.migrations[0][0] == 2
+        ec3.edge_services_matrix[0, -1] = 1390006181
 
     def test_get_cost(self, ec):
         assert ec.get_cost() == ec.cost

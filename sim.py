@@ -251,12 +251,18 @@ class EdgeCloud():
                 logging.debug('n={}'.format(n))
             for es in itertools.combinations(self.services, self.K):
                 self.offline_opt_recursion(n=n, edge_services=set(es))
-        cost_mig_tuples = []
+        cost_mig_svc_tuples = []
         for key in self.offline_opt_recursion_lut.keys():
             if key[0] == self.N:
-                cost_mig_tuples.append(self.offline_opt_recursion_lut[key])
-        (self.cost, self.migrations) = min(cost_mig_tuples,
-                                           key=lambda x: (x[0], -len(x[1])))
+                cost_mig_svc_tuples.append(
+                    self.offline_opt_recursion_lut[key] + key[1:])
+        # Find the one with minimum cost.
+        # If tie: select the one with maximum number of migrations,
+        # If still tie: select the one with smallest ID(s).
+        cost_mig_svc_tuple = min(
+            cost_mig_svc_tuples,
+            key=lambda x: (x[0], -len(x[1])) + x[2:])
+        (self.cost, self.migrations) = cost_mig_svc_tuple[0:2]
 
         logging.debug('Function offline_opt_recursion() was called {} times.'
                       .format(self.offline_opt_recursion_cnt))
@@ -316,7 +322,7 @@ class EdgeCloud():
         (c, m) = self.offline_opt_recursion(n - 1, edge_services)
         svc_tuples.append((0, c, m))  # 0 is a fake service ID
         # Find the one with minimum cost.
-        # If tie: select the one with maximum migrations,
+        # If tie: select the one with maximum number of migrations,
         # If still tie: select the one with lowest ID.
         svc_tuple = min(svc_tuples, key=lambda x: (x[1], -len(x[2]), x[0]))
         res = (svc_tuple[1], svc_tuple[2])
@@ -359,13 +365,19 @@ class EdgeCloud():
             for n in range(self.N + 1):
                 for s in self.services:
                     self.offline_iterative_cost(k, n, s)
-            c_e_tuples = []
+            c_e_m_tuples = []
             for key in self.offline_iterative_cost_lut.keys():
                 if key[0] == k and key[1] == self.N:
-                    c_e_tuples.append(
+                    c_e_m_tuples.append(
                         self.offline_iterative_cost_lut[key])
-            (c, e) = min(c_e_tuples, key=lambda x: (x[0], x[1][-1]))
+            # Find the one with minimum cost.
+            # If tie: select the one with maximum number of migrations,
+            # If still tie: select the one whose last service ID is smallest.
+            (c, e, m) = min(c_e_m_tuples,
+                            key=lambda x: (x[0], -x[2], x[1][-1]))
             self.edge_services_matrix[k - 1, :] = e
+            if k == 1:
+                logging.debug('k=1, cost={}, e={}, mig_cnt={}'.format(c, e, m))
         if self.N <= 4:
             logging.debug('matrix=\n{}'.format(self.edge_services_matrix))
         # Note that a service might appear in more than one unit of storage.
@@ -414,10 +426,11 @@ class EdgeCloud():
         :param k: position of the service s in the edge cloud storage (1..K)
         :param n: sequence number of the request arrival
         :param s: newly added edge service
-        :return (cost, edge_service_chain)
-                  minimum cost after the n-th arrival and the
-                  corresponding edge service chain from the start (0-th
-                  arrival) to the n-th arrival (inclusive), given that
+        :return (cost, edge_service_chain, mig_cnt)
+                  minimum cost after the n-th arrival,
+                  the corresponding edge service chain from the start
+                  (0-th arrival) to the n-th arrival (inclusive), and
+                  its migration counts, given that
                   L_k stores the service s after the n-th arrival.
         """
 
@@ -429,9 +442,9 @@ class EdgeCloud():
 
         if (n <= 0):
             if s == self.edge_services_matrix[k - 1, 0]:
-                res = (0, [s])
+                res = (0, [s], 0)
             else:
-                res = (math.inf, [s])
+                res = (math.inf, [s], 0)
             self.offline_iterative_cost_lut[key] = res
             return res
 
@@ -441,21 +454,24 @@ class EdgeCloud():
             # otherwise r is hosted for sure.
             # In both cases, s should be here after the previous arrival,
             # and stay here after the n-th arrival.
-            (c, e) = self.offline_iterative_cost(k, n - 1, s)
+            (c, e, m) = self.offline_iterative_cost(k, n - 1, s)
             if r not in self.edge_services_matrix[0:k - 1, n]:
                 c += 1
-            res = (c, e + [s])
+            res = (c, e + [s], m)
             self.offline_iterative_cost_lut[key] = res
             return res
         assert r == s
         # Now we know s is the same as r, which means s was here after (n-1)-th
         # arrival already, or there is a migration after n-th arrival.
-        [c, e] = self.offline_iterative_cost(k, n - 1, s)
-        svc_tuples = [(c, e + [s])]
+        [c, e, m] = self.offline_iterative_cost(k, n - 1, s)
+        svc_tuples = [(c, e + [s], m)]
         for svc in self.services - set([s]):
-            (c, e) = self.offline_iterative_cost(k, n - 1, svc)
-            svc_tuples.append((c + self.M, e + [svc]))
-        res = min(svc_tuples, key=lambda x: (x[0], x[1][-1]))
+            (c, e, m) = self.offline_iterative_cost(k, n - 1, svc)
+            svc_tuples.append((c + self.M, e + [s], m + 1))
+        # Find the one with minimum cost.
+        # If tie: select the one with maximum number of migrations,
+        # If still tie: select the deleted service with smallest ID.
+        res = min(svc_tuples, key=lambda x: (x[0], -x[2], x[1][-2]))
         self.offline_iterative_cost_lut[key] = res
         return res
 
