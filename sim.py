@@ -108,7 +108,7 @@ class EdgeCloud():
         # Count the times of LUT hits.
         self.offline_opt_recursion_lut_cnt = 0
 
-    def run_belady(self, modified=False):
+    def run_belady(self, modified=False, alg_time_threshold=60):
         """Bélády's algorithm or the clairvoyant algorithm.
 
         The (unmodified) algorithm always migrate a missing service,
@@ -125,6 +125,24 @@ class EdgeCloud():
         the most times of migrations.
         """
         self.reset()
+
+        alg_name = 'Bélády'
+        if modified:
+            alg_name += ' Modified'
+        # Estimated time (in seconds) needed to run the algorithm.
+        # Seems that (K+1)-multiple search in list.index() is
+        # optimized, so no multiplication by K in calculation below.
+        alg_time = (self.N ** 2) / (2.5e8)
+        if alg_time > 1:
+            logging.info('alg_time={}'.format(alg_time))
+        if alg_time > alg_time_threshold:
+            # Mark invalid cost.
+            logging.warning('{} is very likely to exceed the time '
+                            'threshold so it is skipped. '
+                            'Increase alg_time_threshold if you really '
+                            'want to run it.'.format(alg_name))
+            self.cost = -1
+            return
 
         # The sequence number of arrivals.
         n = 0
@@ -163,13 +181,26 @@ class EdgeCloud():
                 logging.debug('result: forwarded'.format(r))
         self.cost = self.cost_migration + self.cost_forwarding
 
-    def run_RL(self):
+    def run_RL(self, alg_time_threshold=60):
         """The RM-LRU (RL) Online algorithm.
 
         The algorithm combines a retrospective migration (RM) policy and a
         least recently used (LRU) policy for deletion.
         """
         self.reset()
+
+        # Estimated time (in seconds) needed to run the algorithm.
+        alg_time = self.N_unique * self.N / (1.6e7)
+        if alg_time > 1:
+            logging.info('alg_time={}'.format(alg_time))
+        if alg_time > alg_time_threshold:
+            # Mark invalid cost.
+            logging.warning('RL is very likely to exceed the time '
+                            'threshold so it is skipped. '
+                            'Increase alg_time_threshold if you really '
+                            'want to run it.')
+            self.cost = -1
+            return
 
         # b_{i,j} = max_tau (sum x_j(l) - sum x_i(l))^+ for each service pair
         # Here sum is over the latest tau arrivals.
@@ -237,27 +268,43 @@ class EdgeCloud():
             seqnum_del[svc_del] = n
         self.cost = self.cost_migration + self.cost_forwarding
 
-    def run_offline_opt(self):
+    def run_offline_opt(self, alg_time_threshold=60):
         """Offline optimal (OPT) algorithm.
 
         The algorithm calls the offline_opt_recursion routine to find the
         optimal solution. Its time complexity is roughly O(K^N).
+
+        :param alg_time_threshold: estimated allowable time to run the
+                                   OPT algorithm (default 60s)
         """
 
         self.reset()
 
         # Whether to record n in the debug log to indicate the progress.
         log_n = False
-        if self.K > 2 or self.N > 1000:
+        # Estimated time (in seconds) needed to run the algorithm.
+        alg_time = (self.N_unique ** self.K) * self.K * self.N / (5e7)
+        if alg_time > 1:
+            logging.info('alg_time={}'.format(alg_time))
+        if alg_time > alg_time_threshold:
+            # Mark invalid cost.
+            logging.warning('OPT is very likely to exceed the time '
+                            'threshold so it is skipped. '
+                            'Increase alg_time_threshold if you really '
+                            'want to run it.')
+            self.cost = -1
+            return
+        elif alg_time > (alg_time_threshold * 0.5):
             log_n = True
-            logging.warning('Algorithm can be very time and memory consuming!')
+            logging.warning('OPT can be quite time consuming! '
+                            'Progress will be displayed.')
 
         # Pre-calculate offline_opt_recursion(n, es) for all n in 1:N-1 and all
         # possible set of edge services, so that LUT caches the intermediate
         # results.
         for n in range(self.N + 1):
             if log_n:
-                logging.debug('n={}'.format(n))
+                logging.info('n={}'.format(n))
             for es in itertools.combinations(self.services, self.K):
                 self.offline_opt_recursion(n=n, edge_services=set(es))
         cost_mig_svc_tuples = []
@@ -338,13 +385,28 @@ class EdgeCloud():
         self.offline_opt_recursion_lut[key] = res
         return res
 
-    def run_offline_iterative(self):
+    def run_offline_iterative(self, alg_time_threshold=60):
         """Offline iterative algorithm.
 
         The algorithm runs offline optimal algorithm iteratively, each time
         considering one more space for services in the edge cloud.
         """
         self.reset()
+
+        # Estimated time (in seconds) needed to run the algorithm.
+        alg_time = (self.N_unique ** 2) * self.K * self.N / (1e7)
+        if alg_time > 1:
+            logging.info('alg_time={}'.format(alg_time))
+        if alg_time > alg_time_threshold:
+            # Mark invalid cost.
+            logging.warning('Offline Iterative is very likely to '
+                            'exceed the time '
+                            'threshold so it is skipped. '
+                            'Increase alg_time_threshold if you really '
+                            'want to run it.')
+            self.cost = -1
+            return
+
         # LUT for offline_iterative_cost function.
         self.offline_iterative_cost_lut = defaultdict(lambda: (-1, []))
         self.offline_iterative_cost_lut_cnt = 0
