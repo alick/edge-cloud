@@ -141,7 +141,7 @@ class EdgeCloud():
                             'threshold so it is skipped. '
                             'Increase alg_time_threshold if you really '
                             'want to run it.'.format(alg_name))
-            self.cost = -1
+            self.cost = None
             return
 
         # The sequence number of arrivals.
@@ -199,7 +199,7 @@ class EdgeCloud():
                             'threshold so it is skipped. '
                             'Increase alg_time_threshold if you really '
                             'want to run it.')
-            self.cost = -1
+            self.cost = None
             return
 
         # b_{i,j} = max_tau (sum x_j(l) - sum x_i(l))^+ for each service pair
@@ -292,7 +292,7 @@ class EdgeCloud():
                             'threshold so it is skipped. '
                             'Increase alg_time_threshold if you really '
                             'want to run it.')
-            self.cost = -1
+            self.cost = None
             return
         elif alg_time > (alg_time_threshold * 0.5):
             log_n = True
@@ -404,7 +404,7 @@ class EdgeCloud():
                             'threshold so it is skipped. '
                             'Increase alg_time_threshold if you really '
                             'want to run it.')
-            self.cost = -1
+            self.cost = None
             return
 
         # LUT for offline_iterative_cost function.
@@ -723,7 +723,10 @@ def main():
         'RL': 'r*-',
         'OPT': 'md-'}
     for key in costs.keys():
-        plt.plot(var, costs[key], styles[key], label=labels[key])
+        cost = np.array(costs[key], dtype=np.double)
+        mask = np.isfinite(cost)
+        var = np.array(var, dtype=np.uint32)
+        plt.plot(var[mask], cost[mask], styles[key], label=labels[key])
     plt.xlabel(var_str)
     plt.ylabel('Cost')
     plt.title(con_str + '={}'.format(con))
