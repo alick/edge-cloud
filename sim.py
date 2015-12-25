@@ -735,8 +735,8 @@ def main():
     plt.ylabel('Cost')
     plt.title(con_str + '={}'.format(con))
     plt.legend(loc='best')
-    fname = 'fig-{}{}-{}{}_{}.pdf'.format(
-        con_str, con, var_str, var[0], var[-1])
+    fname = 'fig-N{}-{}{}-{}{}_{}.pdf'.format(
+        args.N, con_str, con, var_str, var[0], var[-1])
     plt.savefig(fname, bbox_inches='tight')
 
 if __name__ == '__main__':
