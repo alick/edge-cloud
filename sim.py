@@ -72,11 +72,13 @@ class EdgeCloud():
         assert len(self.services) == self.N_unique
 
         if self.N_unique <= self.K:
-            logging.warning('WARN: Storage can hold all possible services!')
+            logging.warning('WARN: Storage can hold all possible '
+                            'services!')
             self.K = self.N_unique
 
         logging.info('No. requests: N={0}'.format(self.N))
-        logging.info('No. unique services: |S|={0}'.format(self.N_unique))
+        logging.info('No. unique services: |S|={0}'
+                     .format(self.N_unique))
         logging.info('No. edge services: K={0}'.format(self.K))
         logging.info('Cost ratio: M={0}'.format(self.M))
 
