@@ -10,6 +10,7 @@ import sys
 import math
 import itertools
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 
 
@@ -722,19 +723,21 @@ def main():
         'IT': 'g^-',
         'RL': 'r*-',
         'OPT': 'md-'}
+    matplotlib.rcParams.update({'font.size': 16})
     for key in costs.keys():
         cost = np.array(costs[key], dtype=np.double)
         mask = np.isfinite(cost)
         var = np.array(var, dtype=np.uint32)
-        plt.plot(var[mask], cost[mask], styles[key], label=labels[key])
+        plt.plot(var[mask], cost[mask],
+                 styles[key], label=labels[key],
+                 linewidth=2.0)
     plt.xlabel(var_str)
     plt.ylabel('Cost')
     plt.title(con_str + '={}'.format(con))
     plt.legend(loc='best')
-    plt.show()
     fname = 'fig-{}{}-{}{}_{}.pdf'.format(
         con_str, con, var_str, var[0], var[-1])
-    plt.savefig(fname)
+    plt.savefig(fname, bbox_inches='tight')
 
 if __name__ == '__main__':
     main()
