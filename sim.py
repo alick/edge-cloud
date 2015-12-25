@@ -3,13 +3,14 @@
 # Simulation of Edge Cloud Migration
 
 # defaultdict provides default values for missing keys
-from collections import defaultdict, deque
+from collections import defaultdict, deque, OrderedDict
 import argparse
 import logging
 import sys
 import math
 import itertools
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 class EdgeCloud():
@@ -513,26 +514,73 @@ class EdgeCloud():
         return self.cost
 
 
-if __name__ == '__main__':
+def parseNumRange(string):
+    """Parse command line number range (e.g. 1-10, 2:5, 1, 2.33).
+
+    :param string: command line argument string
+    :return: a list of integers in the indicated range, or
+             the original number if it is not a range.
+
+    cf. http://stackoverflow.com/a/6512463/1166587
+    """
+    if string.find('-') >= 0:
+        interval = string.split('-')
+    elif string.find(':') >= 0:
+        interval = string.split(':')
+    else:
+        interval = [string]
+    start = interval[0]
+    end = interval[-1]
+    if start == end:
+        # We know that string contains just a number.
+        try:
+            res = int(start)
+        except ValueError:
+            try:
+                res = float(start)
+                # If the floating point number equals an integer,
+                # turn it into that integer for neat log filename.
+                # (e.g. sim-M5.log instead sim-M5.0.log)
+                if res == int(res):
+                    res = int(res)
+            except ValueError:
+                raise argparse.ArgumentTypeError(
+                    '`{}\' is not a number or number range!'
+                    .format(string))
+        return [res]
+    else:
+        return list(range(int(start), int(end) + 1))
+
+
+def main():
+    """Main routine.
+    """
     parser = argparse.ArgumentParser(
         description='Simulate edge cloud migration.')
     parser.add_argument('-N', dest='N', type=int, default=None,
-                        help='number of requests from file used in simulation')
-    parser.add_argument('-K', dest='K', type=int, default=5,
+                        help='number of requests from file '
+                             'used in simulation')
+    parser.add_argument('-K', dest='K',
+                        type=parseNumRange, default=[5],
                         help='number of services hosted by edge cloud '
                              '(default: 5)')
-    parser.add_argument('-M', dest='M', type=float, default=5,
+    parser.add_argument('-M', dest='M',
+                        type=parseNumRange, default=[5],
                         help='cost ratio of migration over forwarding '
                              '(default: 5)')
     parser.add_argument('-d', '--debug', dest='debug', action='store_true',
                         help='enable debug (default: disabled)')
 
     args = parser.parse_args()
-    # If the floating point number represented in str args.M equals an integer,
-    # turn it into that integer for neat filename when debugging.
-    # (e.g. sim-M5.log instead sim-M5.0.log)
-    if args.M == int(args.M):
-        args.M = int(args.M)
+
+    if len(args.M) == 1 and len(args.K) == 1:
+        plot = False
+    elif len(args.M) == 1 or len(args.K) == 1:
+        # One of K and M is a list of integers.
+        plot = True
+    else:
+        # Both K and M are lists. Not supported.
+        raise Error('K and M are both ranges. Not supported!')
 
     # Configure logging.
     if args.debug:
@@ -548,37 +596,80 @@ if __name__ == '__main__':
             stream=sys.stdout,
             format='%(message)s')
 
-    ec = EdgeCloud('traces/requests-job_id.dat', K=args.K, M=args.M,
-                   N=args.N)
+    labels = {
+        'ST':  'Static',
+        'BM':  'Bélády Mod',
+        'RL':  'RL',
+        'IT':  'Iterative',
+        'OPT': 'OPT'}
+    costs = OrderedDict([
+        ('ST', []),
+        ('BM', []),
+        ('IT', []),
+        ('RL', []),
+        ('OPT', [])])
+    for k in args.K:
+        for m in args.M:
+            ec = EdgeCloud('traces/requests-job_id.dat',
+                           K=k, M=m, N=args.N)
 
-    ec.run_no_migration()
-    logging.info('Total cost of no migration: {}'.format(ec.get_cost()))
+            ec.run_static()
+            costs['ST'].append(ec.get_cost())
+            ec.print_migrations()
+            logging.info('Total cost of {}: {}'
+                         .format(labels['ST'], ec.get_cost()))
 
-    ec.run_static()
-    ec.print_migrations()
-    logging.info('Total cost of offline static: {}'.format(ec.get_cost()))
+            ec.run_RL()
+            costs['RL'].append(ec.get_cost())
+            ec.print_migrations()
+            logging.info('Total cost of RL: {}'.format(ec.get_cost()))
 
-    if ec.N <= 10000 or args.debug:
-        ec.run_RL()
-        ec.print_migrations()
-        logging.info('Total cost of RL: {}'.format(ec.get_cost()))
+            ec.run_belady(modified=True)
+            costs['BM'].append(ec.get_cost())
+            ec.print_migrations()
+            logging.info('Total cost of Bélády Modified: {}'
+                         .format(ec.get_cost()))
 
-        ec.run_belady()
-        ec.print_migrations()
-        logging.info('Total cost of Bélády: {}'.format(ec.get_cost()))
+            ec.run_offline_iterative()
+            costs['IT'].append(ec.get_cost())
+            ec.print_migrations()
+            logging.info('Total cost of Iterative: {}'
+                         .format(ec.get_cost()))
 
-        ec.run_belady(modified=True)
-        ec.print_migrations()
-        logging.info('Total cost of Bélády Modified: {}'.format(ec.get_cost()))
-
-        ec.run_offline_iterative()
-        ec.print_migrations()
-        logging.info('Total cost of Offline Iterative: {}'
-                     .format(ec.get_cost()))
-
-        ec.run_offline_opt()
-        ec.print_migrations()
-        logging.info('Total cost of OPT: {}'.format(ec.get_cost()))
+            ec.run_offline_opt()
+            costs['OPT'].append(ec.get_cost())
+            ec.print_migrations()
+            logging.info('Total cost of OPT: {}'.format(ec.get_cost()))
+    for key in costs.keys():
+        logging.info('{:5}{}'.format(key, costs[key]))
+    if not plot:
+        return
+    if len(args.M) > len(args.K):
+        var = args.M
+        con = args.K[0]
+        var_str = 'M'
+        con_str = 'K'
     else:
-        logging.info('RL, Bélády, OPT were skipped '
-                     'as they can be too time consuming.')
+        var = args.K
+        con = args.M[0]
+        var_str = 'K'
+        con_str = 'M'
+    styles = {
+        'ST': 'k.-',
+        'BM': 'bo-',
+        'IT': 'g^-',
+        'RL': 'r*-',
+        'OPT': 'md-'}
+    for key in costs.keys():
+        plt.plot(var, costs[key], styles[key], label=labels[key])
+    plt.xlabel(var_str)
+    plt.ylabel('Cost')
+    plt.title(con_str + '={}'.format(con))
+    plt.legend(loc='best')
+    plt.show()
+    fname = 'fig-{}{}-{}{}_{}.pdf'.format(
+        con_str, con, var_str, var[0], var[-1])
+    plt.savefig(fname)
+
+if __name__ == '__main__':
+    main()

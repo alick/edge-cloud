@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # QA test for edge cloud simulation.
 
-from sim import EdgeCloud
+from sim import EdgeCloud, parseNumRange
 import pytest
 
 
@@ -99,3 +99,10 @@ class TestEdgeCloud:
         ec = EdgeCloud('traces/requests-job_id.dat', K=5, M=1.2, N=1000)
         ec.run_RL()
         assert True
+
+
+def test_parseNumRange():
+    assert parseNumRange('1-10') == list(range(1, 11))
+    assert parseNumRange('2:5') == list(range(2, 6))
+    assert parseNumRange('2.5') == [2.5]
+    assert parseNumRange('5') == [5]
