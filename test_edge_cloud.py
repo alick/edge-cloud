@@ -61,7 +61,6 @@ class TestEdgeCloud:
         assert ec.edge_services is not None
         assert ec.cost == 0
         assert ec.migrations == []
-        assert ec.requests_seen == []
 
     def test_belady(self, ec):
         ec.run_belady()
@@ -79,8 +78,10 @@ class TestEdgeCloud:
 
     def test_RL(self, ec):
         ec.run_RL()
-        assert ec.get_cost() >= 0
-        assert len(ec.migrations) >= 0
+        assert ec.get_cost() == 127
+        assert len(ec.migrations) == 2
+        assert ec.migrations[0] == (23, 1164728954, (679429735, 754112949))
+        assert ec.migrations[1] == (39, 1263655469, (757745334, 975992247))
 
     def test_no_migration(self, ec):
         ec.run_no_migration()

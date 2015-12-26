@@ -133,7 +133,6 @@ class EdgeCloud():
         self.cost_forwarding = 0
         self.cost = 0
         self.migrations = []
-        self.requests_seen = []
         # Count the times the offline_opt_recursion function is called.
         self.offline_opt_recursion_cnt = 0
         # Lookup table (LUT) of the offline_opt_recursion function.
@@ -247,64 +246,67 @@ class EdgeCloud():
         for s in self.services:
             qlen = math.ceil(2 * self.M[s] / self.F[s])
             seqnums[s] = deque([0]*qlen, maxlen=qlen)
-        # The sequence number of the latest migration for each service.
-        seqnum_mig = defaultdict(int)
-        # The sequence number of the latest deletion for each service.
-        seqnum_del = defaultdict(int)
         n = 0
 
         for r in self.requests:
             n += 1
-            self.requests_seen.append(r)
-            assert len(self.requests_seen) == n
+            W_new = self.W[r]
             seqnums[r].append(n)
-            logging.debug('n={}, request={}'.format(n, r))
-            # r == S_j
+            logging.debug(
+                'n={}, request={}, M={}, F={}, W={}, K_rem={}'
+                .format(n, r, self.M[r], self.F[r], self.W[r], self.K_rem))
+            # r == S_j (i^*)
             if r in self.edge_services:
                 # r will be hosted by the edge cloud immediately. No cost.
                 for b_key in b:
                     if ((b_key[0] == r) and
                             (b_key[1] not in self.edge_services)):
-                        b[b_key] = max(0, b[b_key] - 1)
+                        b[b_key] = max(0, b[b_key] - self.F[r])
                 logging.debug('result: hosted')
                 continue
             # Now we know r (i.e. S_j, i^*) is not hosted by the edge cloud.
-            migration = False
+            m = False  # Flag to indicate whether to migrate or not.
             for req in self.edge_services:
                 # req (S_i) should be hosted by the edge cloud.
-                b[(req, r)] += 1
-                if b[(req, r)] >= 2*self.M[r]:
-                    migration = True
-            if not migration:
+                b[(req, r)] += self.F[r]
+                if b[(req, r)] >= self.M[req] + self.M[r]:
+                    m = True
+            if (not m) or (W_new > self.K):
                 # r needs to be forwarded.
                 logging.debug('result: forwarded')
                 self.cost_forwarding += self.F[r]
                 continue
-            assert migration is True
-            # FIXME
+            # Now we know r should and can be migrated.
+            assert m and W_new <= self.K
             # Delete zero or more services until new service can fit in.
-            # Find the service to be deleted.
-            # It is the one in edge cloud with smallest sequence number for the
-            # past 2M requests
-            # Build a list of tuples: (service, head of queue per service)
-            svc_tuples = [(s, seqnums[s][0]) for s in self.edge_services]
-            svc_del = min(svc_tuples, key=lambda x: (x[1], x[0]))[0]
-            assert svc_del in self.edge_services
+            # They are the ones in edge cloud with smallest sequence numbers
+            # for the past 2M requests.
+            ss_del = []
+            if self.K_rem < W_new:
+                # Build a list of tuples: (service, head of queue per service)
+                s_tuples = [(s, seqnums[s][0]) for s in self.edge_services]
+                sorted_s_tuples = sorted(
+                    s_tuples,
+                    key=lambda x: (x[1], x[0]),
+                    reverse=True)
             # Run and record the migration and deletion.
-            self.edge_services.remove(svc_del)
+            while self.K_rem < W_new:
+                # Pop out the last one.
+                s_tuple = sorted_s_tuples.pop()
+                s_del = s_tuple[0]
+                ss_del.append(s_del)
+                self.edge_services.remove(s_del)
+                self.K_rem += self.W[s_del]
             self.edge_services.add(r)
-            assert r in self.edge_services
-            assert svc_del not in self.edge_services
+            self.K_rem -= W_new
             # Need to reset b_{i^*,j} = 0 for all j where i^* to be migrated,
             # and b_{i,j^*} = 0 for all i where j^* to be deleted.
             for b_key in b:
-                if b_key[0] == r or b_key[1] == svc_del:
+                if b_key[0] == r or b_key[1] in ss_del:
                     b[b_key] = 0
-            self.migrations.append((n, r, svc_del))
+            self.migrations.append((n, r, tuple(ss_del)))
             self.cost_migration += self.M[r]
-            logging.debug('result: migrated. ({} deleted)'.format(svc_del))
-            seqnum_mig[r] = n
-            seqnum_del[svc_del] = n
+            logging.debug('result: migrated. ({} deleted)'.format(ss_del))
         self.cost = self.cost_migration + self.cost_forwarding
 
     def run_no_migration(self):
