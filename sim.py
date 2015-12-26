@@ -308,9 +308,15 @@ class EdgeCloud():
                 logging.info('n={}'.format(n))
             for es in itertools.combinations(self.services, self.K):
                 self.offline_opt_recursion(n=n, edge_services=set(es))
+            # LUT prev <= current
+            for key in self.offline_opt_recursion_lut.keys():
+                if key[0] == 1:
+                    self.offline_opt_recursion_lut[(0,) + key[1:]] = \
+                        self.offline_opt_recursion_lut[key]
+                    self.offline_opt_recursion_lut[key] = (-1, [])
         cost_mig_svc_tuples = []
         for key in self.offline_opt_recursion_lut.keys():
-            if key[0] == self.N:
+            if key[0] == 0:
                 cost_mig_svc_tuples.append(
                     self.offline_opt_recursion_lut[key] + key[1:])
         # Find the one with minimum cost.
@@ -339,7 +345,7 @@ class EdgeCloud():
         # edge services sorted by their IDs in the ascending order.
         # The value is a tuple of the cost calculated, followed by the list of
         # corresponding migrations.
-        key = (n,) + tuple(sorted(edge_services))
+        key = (1,) + tuple(sorted(edge_services))
         if (self.offline_opt_recursion_lut[key])[0] >= 0:
             self.offline_opt_recursion_lut_cnt += 1
             return self.offline_opt_recursion_lut[key]
@@ -352,6 +358,8 @@ class EdgeCloud():
             else:
                 res = (math.inf, [])
             self.offline_opt_recursion_lut[key] = res
+            key_tmp = (0,) + key[1:]
+            self.offline_opt_recursion_lut[key_tmp] = res
             return res
 
         # Otherwise, deal with the n-th (n >= 1) arrival.
@@ -359,7 +367,8 @@ class EdgeCloud():
         r = self.requests[n - 1]
         if r not in edge_services:
             # forwarding, no migration
-            (c, m) = self.offline_opt_recursion(n - 1, edge_services)
+            key_tmp = (0,) + tuple(sorted(edge_services))
+            (c, m) = self.offline_opt_recursion_lut[key_tmp]
             res = (c + 1, m)
             self.offline_opt_recursion_lut[key] = res
             return res
@@ -371,12 +380,14 @@ class EdgeCloud():
             es = edge_services.copy()
             es.remove(r)
             es.add(s)
-            (c, m) = self.offline_opt_recursion(n - 1, es)
+            key_tmp = (0,) + tuple(sorted(es))
+            (c, m) = self.offline_opt_recursion_lut[key_tmp]
             cost = self.M + c
             migrations = m + [(n, r, s)]
             svc_tuples.append((s, cost, migrations))
         # Find cost of hosting r
-        (c, m) = self.offline_opt_recursion(n - 1, edge_services)
+        key_tmp = (0,) + tuple(sorted(edge_services))
+        (c, m) = self.offline_opt_recursion_lut[key_tmp]
         svc_tuples.append((0, c, m))  # 0 is a fake service ID
         # Find the one with minimum cost.
         # If tie: select the one with maximum number of migrations,
