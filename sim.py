@@ -339,7 +339,7 @@ class EdgeCloud():
         # edge services sorted by their IDs in the ascending order.
         # The value is a tuple of the cost calculated, followed by the list of
         # corresponding migrations.
-        key = (n, tuple(sorted(edge_services)))
+        key = (n,) + tuple(sorted(edge_services))
         if (self.offline_opt_recursion_lut[key])[0] >= 0:
             self.offline_opt_recursion_lut_cnt += 1
             return self.offline_opt_recursion_lut[key]
