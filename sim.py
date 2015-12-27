@@ -73,6 +73,8 @@ class EdgeCloud():
         self.services = set(self.sorted_requests)
         assert len(self.services) == self.N_unique
 
+        self.gen_het_services()
+
         if self.N_unique <= self.K:
             logging.warning('WARN: Storage can hold all possible '
                             'services!')
@@ -91,6 +93,31 @@ class EdgeCloud():
             math.inf = float('inf')
 
         self.reset()
+
+    def gen_het_services(self, stat=True, special=False, M=5):
+        self.M = dict()
+        self.F = dict()
+        self.W = dict()  # space requirement per service
+        if not special:
+            # Generate heterogeneous service requirements by service ID.
+            for s in self.services:
+                s = int(s)
+                self.F[s] = s % 3 + 1
+                # // is floor division (integer division) in Python.
+                self.M[s] = ((s // 3) % 3 + 1) * 5
+                self.W[s] = (s // 9) % 3 + 1
+        else:
+            # Reduce to homogeneous case.
+            for s in self.services:
+                self.M[s] = M
+                self.F[s] = 1
+                self.W[s] = 1
+        if stat:
+            # Inspect the heterogeneity.
+            F_cnt = [0] * 3
+            for f in self.F.items():
+                F_cnt[f - 1] += 1
+            logging.info('F freq counts: {}'.format(F_cnt))
 
     def reset(self):
         """Reset parameters updated by algorithms."""

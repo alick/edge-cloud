@@ -20,6 +20,36 @@ class TestEdgeCloud:
                                      < ec.sorted_requests[-1]
         assert ec.cost == 0
         assert ec.migrations == []
+        assert len(ec.services) == ec.N_unique
+
+    def test_gen_het_services(self, ec):
+        ec.gen_het_services()
+        assert len(ec.F) == ec.N_unique
+        # Inspect the heterogeneity.
+        F_cnt = [0] * 3
+        for f in ec.F.values():
+            F_cnt[f - 1] += 1
+        # Ensure completeness.
+        assert sum(F_cnt) == ec.N_unique
+        # Roughly uniformly distributed.
+        assert min(F_cnt) > 0
+        assert max(F_cnt) - min(F_cnt) < ec.N_unique / 2
+        # Similar for W
+        assert len(ec.W) == ec.N_unique
+        W_cnt = [0] * 3
+        for w in ec.W.values():
+            W_cnt[w - 1] += 1
+        assert sum(W_cnt) == ec.N_unique
+        assert min(W_cnt) > 0
+        assert max(W_cnt) - min(W_cnt) < ec.N_unique / 2
+        # Similar for M
+        assert len(ec.M) == ec.N_unique
+        M_cnt = [0] * 3
+        for m in ec.M.values():
+            M_cnt[m // 5 - 1] += 1
+        assert sum(M_cnt) == ec.N_unique
+        assert min(M_cnt) > 0
+        assert max(M_cnt) - min(M_cnt) < ec.N_unique / 2
 
     def test_reset(self, ec):
         ec.reset()
