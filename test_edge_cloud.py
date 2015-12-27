@@ -62,19 +62,13 @@ class TestEdgeCloud:
         assert ec.cost == 0
         assert ec.migrations == []
 
-    def test_belady(self, ec):
-        ec.run_belady()
-        assert ec.get_cost() >= 0
-        assert len(ec.migrations) >= 0
-        # There is no forwarding for missing services.
-        assert ec.cost_forwarding == 0
-        assert ec.cost == ec.cost_migration
-
     def test_belady_modified(self, ec):
         ec.run_belady(modified=True)
-        assert ec.get_cost() >= 0
-        assert len(ec.migrations) >= 0
-        assert ec.cost_forwarding >= 0
+        assert ec.get_cost() == 269
+        assert len(ec.migrations) == 22
+        assert ec.migrations[0][0] == 4
+        assert ec.migrations[-1][0] == 88
+        assert ec.cost_forwarding > 0
 
     def test_RL(self, ec):
         ec.run_RL()

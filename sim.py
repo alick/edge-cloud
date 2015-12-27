@@ -180,39 +180,74 @@ class EdgeCloud():
         n = 0
         for r in self.requests:
             n += 1
-            logging.debug('n={}, request={}'.format(n, r))
+            W_new = self.W[r]
+            logging.debug(
+                'n={}, request={}, M={}, F={}, W={}, K_rem={}'
+                .format(n, r, self.M[r], self.F[r], self.W[r], self.K_rem))
 
             migration = False
-            if r not in self.edge_services:
-                # r is not hosted. Migrate it.
-                migration = True
-            else:
+            forwarding = False
+            if r in self.edge_services:
                 # r is already hosted.
                 logging.debug('result: hosted')
                 continue
+            elif W_new > self.K:
+                forwarding = True
+                self.cost_forwarding += self.F[r]
+                logging.debug('result: forwarded (cannot fit in)'.format(r))
+                continue
+            else:
+                # r is not hosted and can be hosted. Migrate it.
+                migration = True
             assert migration
-            # Find the service to be deleted.
+            assert not forwarding
+            # Delete zero or more services until new service can fit in.
+            ss_del = []
+            if modified:
+                # Note self.edge_services is modified and might need to be
+                # restored in case the migration is aborted.
+                self.edge_services.add(r)
             # Note the [s] concatenated to self.requests is to avoid ValueError
             # exception raised by list.index() when no such element is found.
-            if modified:
-                self.edge_services.add(r)
-            svc_tuples = [(s, (self.requests + [s]).index(s, n))
-                          for s in self.edge_services]
-            # FIXME
-            # Delete zero or more services until new service can fit in.
-            svc_del = max(svc_tuples, key=lambda x: (x[1], x[0]))[0]
-            assert svc_del in self.edge_services
+            # Use a local K_rem in case the migration is aborted.
+            K_rem = self.K_rem
+            if K_rem < W_new:
+                s_tuples = [(s, (self.requests + [s]).index(s, n))
+                            for s in self.edge_services]
+                sorted_s_tuples = sorted(
+                    s_tuples,
+                    key=lambda x: (x[1], x[0]))
             # Run and record the migration and deletion.
-            self.edge_services.remove(svc_del)
-            if r != svc_del:
-                self.edge_services.add(r)
-                self.migrations.append((n, r, svc_del))
-                self.cost_migration += self.M[r]
-                logging.debug('result: migrated. ({} deleted)'.format(svc_del))
-            else:
+            while K_rem < W_new:
+                s_tuple = sorted_s_tuples.pop()
+                s_del = s_tuple[0]
+                if s_del == r:
+                    assert modified
+                    # If the new service is to be deleted, then we abort the
+                    # migration and switch to forwarding.
+                    # self.K_rem remains unchanged, while
+                    # self.edge_services needs to be restored.
+                    forwarding = True
+                    break
+                ss_del.append(s_del)
+                K_rem += self.W[s_del]
+            if forwarding:
                 assert modified
+                self.edge_services.remove(r)
                 self.cost_forwarding += self.F[r]
-                logging.debug('result: forwarded'.format(r))
+                logging.debug('result: forwarded (next request too late)'
+                              .format(r))
+                continue
+            for s in ss_del:
+                self.edge_services.remove(s)
+            if not modified:
+                self.edge_services.add(r)
+            self.K_rem = K_rem - W_new
+            assert self.K_rem == self.K - \
+                sum(self.W[s] for s in self.edge_services)
+            self.migrations.append((n, r, tuple(ss_del)))
+            self.cost_migration += self.M[r]
+            logging.debug('result: migrated. ({} deleted)'.format(ss_del))
         self.cost = self.cost_migration + self.cost_forwarding
 
     def run_RL(self, alg_time_threshold=60):
