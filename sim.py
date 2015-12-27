@@ -416,61 +416,37 @@ def main():
     labels = {
         'ST':  'Static',
         'BM':  'Bélády Mod',
-        'RL':  'RL',
-        'IT':  'Iterative',
-        'OPT': 'OPT'}
+        'RL':  'RL'}
     costs = OrderedDict([
         ('ST', []),
         ('BM', []),
-        ('IT', []),
-        ('RL', []),
-        ('OPT', [])])
+        ('RL', [])])
     for k in args.K:
-        for m in args.M:
-            ec = EdgeCloud('traces/requests-job_id.dat',
-                           K=k, M=m, N=args.N)
+        ec = EdgeCloud('traces/requests-job_id.dat',
+                       K=k, N=args.N)
 
-            ec.run_static()
-            costs['ST'].append(ec.get_cost())
-            ec.print_migrations()
-            logging.info('Total cost of {}: {}'
-                         .format(labels['ST'], ec.get_cost()))
+        ec.run_static()
+        costs['ST'].append(ec.get_cost())
+        ec.print_migrations()
+        logging.info('Total cost of {}: {}'
+                     .format(labels['ST'], ec.get_cost()))
 
-            ec.run_RL()
-            costs['RL'].append(ec.get_cost())
-            ec.print_migrations()
-            logging.info('Total cost of RL: {}'.format(ec.get_cost()))
+        ec.run_RL()
+        costs['RL'].append(ec.get_cost())
+        ec.print_migrations()
+        logging.info('Total cost of RL: {}'.format(ec.get_cost()))
 
-            ec.run_belady(modified=True)
-            costs['BM'].append(ec.get_cost())
-            ec.print_migrations()
-            logging.info('Total cost of Bélády Modified: {}'
-                         .format(ec.get_cost()))
-
-            ec.run_offline_iterative()
-            costs['IT'].append(ec.get_cost())
-            ec.print_migrations()
-            logging.info('Total cost of Iterative: {}'
-                         .format(ec.get_cost()))
-
-            ec.run_offline_opt()
-            costs['OPT'].append(ec.get_cost())
-            ec.print_migrations()
-            logging.info('Total cost of OPT: {}'.format(ec.get_cost()))
+        ec.run_belady(modified=True)
+        costs['BM'].append(ec.get_cost())
+        ec.print_migrations()
+        logging.info('Total cost of Bélády Modified: {}'
+                     .format(ec.get_cost()))
     for key in costs.keys():
         logging.info('{:5}{}'.format(key, costs[key]))
     if not plot:
         return
-    if len(args.M) > len(args.K):
-        var = args.M
-        con = args.K[0]
-        var_str = 'M'
-        con_str = 'K'
-    else:
-        var = args.K
-        con = args.M[0]
-        var_str = 'K'
-        con_str = 'M'
+    var = args.K
+    var_str = 'K'
     styles = {
         'ST': 'k.-',
         'BM': 'bo-',
@@ -485,10 +461,9 @@ def main():
                  linewidth=2.0)
     plt.xlabel(var_str)
     plt.ylabel('Cost')
-    plt.title(con_str + '={}'.format(con))
     plt.legend(loc='best')
-    fname = 'fig-N{}-{}{}-{}{}_{}.pdf'.format(
-        args.N, con_str, con, var_str, var[0], var[-1])
+    fname = 'fig-N{}-het-{}{}_{}.pdf'.format(
+        args.N, var_str, var[0], var[-1])
     plt.savefig(fname, bbox_inches='tight')
 
 if __name__ == '__main__':
