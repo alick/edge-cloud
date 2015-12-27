@@ -50,6 +50,12 @@ class TestEdgeCloud:
         assert min(M_cnt) > 0
         assert max(M_cnt) - min(M_cnt) < ec.N_unique / 2
 
+    def test_init_edge_services(self, ec):
+        ec.init_edge_services()
+        assert 0 < len(ec.edge_services) <= ec.K
+        assert 0 <= ec.K_rem < ec.K
+        assert sum(ec.W[s] for s in ec.edge_services) + ec.K_rem == ec.K
+
     def test_reset(self, ec):
         ec.reset()
         assert ec.edge_services is not None

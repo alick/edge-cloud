@@ -80,7 +80,7 @@ class EdgeCloud():
         logging.info('No. requests: N={0}'.format(self.N))
         logging.info('No. unique services: |S|={0}'
                      .format(self.N_unique))
-        logging.info('No. edge services: K={0}'.format(self.K))
+        logging.info('Edge cloud capacity: K={0}'.format(self.K))
 
         # Python 3.5 offers math.inf, which is equivalent to float('inf').
         try:
@@ -89,6 +89,7 @@ class EdgeCloud():
             math.inf = float('inf')
 
         self.reset()
+        logging.info('Initial edge services: {}'.format(self.edge_services))
 
     def gen_het_services(self, special=False, M=5):
         self.M = dict()
@@ -109,11 +110,25 @@ class EdgeCloud():
                 self.F[s] = 1
                 self.W[s] = 1
 
+    def init_edge_services(self):
+        """Initialize the services in the edge cloud storage.
+
+        We use the services with lowest ids that can fit in the storage.
+        """
+        self.K_rem = self.K
+        self.edge_services = set()
+        for s in self.sorted_requests:
+            W = self.W[s]
+            # Skip the services which exceed the capacity.
+            if W <= self.K_rem:
+                self.edge_services.add(s)
+                self.K_rem -= W
+                if self.K_rem < 1:
+                    break
+
     def reset(self):
         """Reset parameters updated by algorithms."""
-        # Fill in the initial K edge cloud services.
-        # We use the K services with lowest id.
-        self.edge_services = set(self.sorted_requests[0:self.K])
+        self.init_edge_services()
         self.cost_migration = 0
         self.cost_forwarding = 0
         self.cost = 0
