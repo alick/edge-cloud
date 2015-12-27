@@ -184,6 +184,8 @@ class EdgeCloud():
                 self.edge_services.add(r)
             svc_tuples = [(s, (self.requests + [s]).index(s, n))
                           for s in self.edge_services]
+            # FIXME
+            # Delete zero or more services until new service can fit in.
             svc_del = max(svc_tuples, key=lambda x: (x[1], x[0]))[0]
             assert svc_del in self.edge_services
             # Run and record the migration and deletion.
@@ -191,11 +193,11 @@ class EdgeCloud():
             if r != svc_del:
                 self.edge_services.add(r)
                 self.migrations.append((n, r, svc_del))
-                self.cost_migration += self.M
+                self.cost_migration += self.M[r]
                 logging.debug('result: migrated. ({} deleted)'.format(svc_del))
             else:
                 assert modified
-                self.cost_forwarding += 1
+                self.cost_forwarding += self.F[r]
                 logging.debug('result: forwarded'.format(r))
         self.cost = self.cost_migration + self.cost_forwarding
 
@@ -225,9 +227,11 @@ class EdgeCloud():
         # In the latest tau arrivals, i is hosted by the edge cloud,
         # and j is not hosted by the edge cloud.
         b = defaultdict(int)
-        # The sequence numbers of the most recent 2*M arrivals for all services
-        seqnums = defaultdict(
-            lambda: deque([0]*2*math.ceil(self.M), maxlen=2*math.ceil(self.M)))
+        # The sequence numbers of the most recent ceil(2*M_i/F_i) arrivals.
+        seqnums = dict()
+        for s in self.services:
+            qlen = math.ceil(2 * self.M[s] / self.F[s])
+            seqnums[s] = deque([0]*qlen, maxlen=qlen)
         # The sequence number of the latest migration for each service.
         seqnum_mig = defaultdict(int)
         # The sequence number of the latest deletion for each service.
@@ -254,14 +258,16 @@ class EdgeCloud():
             for req in self.edge_services:
                 # req (S_i) should be hosted by the edge cloud.
                 b[(req, r)] += 1
-                if b[(req, r)] >= 2*self.M:
+                if b[(req, r)] >= 2*self.M[r]:
                     migration = True
             if not migration:
                 # r needs to be forwarded.
                 logging.debug('result: forwarded')
-                self.cost_forwarding += 1
+                self.cost_forwarding += self.F[r]
                 continue
             assert migration is True
+            # FIXME
+            # Delete zero or more services until new service can fit in.
             # Find the service to be deleted.
             # It is the one in edge cloud with smallest sequence number for the
             # past 2M requests
@@ -280,7 +286,7 @@ class EdgeCloud():
                 if b_key[0] == r or b_key[1] == svc_del:
                     b[b_key] = 0
             self.migrations.append((n, r, svc_del))
-            self.cost_migration += self.M
+            self.cost_migration += self.M[r]
             logging.debug('result: migrated. ({} deleted)'.format(svc_del))
             seqnum_mig[r] = n
             seqnum_del[svc_del] = n
@@ -291,7 +297,7 @@ class EdgeCloud():
         # If no migration happens...
         for r in self.requests:
             if r not in self.edge_services:
-                self.cost_forwarding += 1
+                self.cost_forwarding += self.F[r]
         assert self.cost_migration == 0
         self.cost = self.cost_forwarding
 
@@ -300,6 +306,8 @@ class EdgeCloud():
 
         This algorithm migrates the K most popular services once and for all.
         """
+        # FIXME
+        # Use dynamic programming to solve the back packing problem.
         self.reset()
         # Find the K most popular services, and migrate them.
         edge_services_wished = set(
@@ -309,15 +317,15 @@ class EdgeCloud():
             1,
             tuple(edge_services_migrated),
             tuple(self.edge_services - edge_services_wished)))
-        self.cost_migration = self.M * len(edge_services_migrated)
+        # Sum of all services migrated.
+        for es in edge_services_migrated:
+            self.cost_migration += self.M[es]
         # After migration, edge services are the ones we want.
         self.cost_forwarding = 0
         self.edge_services = edge_services_wished
         for r in self.requests:
             if r not in self.edge_services:
-                self.cost_forwarding += 1
-        assert self.cost_forwarding == self.N - sum(
-            x[1] for x in self.sorted_requests_cnt[0:self.K])
+                self.cost_forwarding += self.F[r]
         self.cost = self.cost_migration + self.cost_forwarding
 
     def print_migrations(self):
