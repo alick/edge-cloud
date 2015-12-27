@@ -245,7 +245,7 @@ class EdgeCloud():
             self.K_rem = K_rem - W_new
             assert self.K_rem == self.K - \
                 sum(self.W[s] for s in self.edge_services)
-            self.migrations.append((n, r, tuple(ss_del)))
+            self.migrations.append((n, r, self.fmt_services(ss_del)))
             self.cost_migration += self.M[r]
             logging.debug('result: migrated. ({} deleted)'.format(ss_del))
         self.cost = self.cost_migration + self.cost_forwarding
@@ -339,7 +339,7 @@ class EdgeCloud():
             for b_key in b:
                 if b_key[0] == r or b_key[1] in ss_del:
                     b[b_key] = 0
-            self.migrations.append((n, r, tuple(ss_del)))
+            self.migrations.append((n, r, self.fmt_services(ss_del)))
             self.cost_migration += self.M[r]
             logging.debug('result: migrated. ({} deleted)'.format(ss_del))
         self.cost = self.cost_migration + self.cost_forwarding
@@ -390,8 +390,8 @@ class EdgeCloud():
             deleted = migration[2]
             logging.debug(format_str.format(time, migrated, deleted))
 
-    def fmt_svc_set(self, svc_set):
-        res = tuple(svc_set)
+    def fmt_services(self, services):
+        res = tuple(services)
         if len(res) == 1:
             return int(res[0])
         else:
