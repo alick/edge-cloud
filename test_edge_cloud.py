@@ -79,7 +79,9 @@ class TestEdgeCloud:
 
     def test_no_migration(self, ec):
         ec.run_no_migration()
-        assert ec.get_cost() >= 0
+        assert ec.get_cost() == 158
+        assert len(ec.migrations) == 0
+        assert ec.cost == ec.cost_forwarding
 
     def test_static(self, ec):
         ec.run_static()
