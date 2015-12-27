@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 class EdgeCloud():
     """The EdgeCloud class holds all the magic."""
 
-    def __init__(self, path_to_file, K=5, M=5, N=None):
+    def __init__(self, path_to_file, K=5, N=None, special=False, M=5):
         """Initialize with a file containing the sequence of requests.
 
         :param path_to_file: string to specify the path to the file
@@ -30,10 +30,8 @@ class EdgeCloud():
             self.K = int(K)
         else:
             raise Exception('The parameter K should be a positive integer.')
-        if M >= 1:
-            self.M = float(M)
-        else:
-            raise Exception('The parameter M should be at least 1.')
+        if special and M < 1:
+                raise Exception('The parameter M should be at least 1.')
         if N is None:
             self.N = None
         elif N >= 1:
@@ -71,9 +69,8 @@ class EdgeCloud():
 
         # Set of all possible services.
         self.services = set(self.sorted_requests)
-        assert len(self.services) == self.N_unique
 
-        self.gen_het_services()
+        self.gen_het_services(special=special, M=M)
 
         if self.N_unique <= self.K:
             logging.warning('WARN: Storage can hold all possible '
@@ -84,7 +81,6 @@ class EdgeCloud():
         logging.info('No. unique services: |S|={0}'
                      .format(self.N_unique))
         logging.info('No. edge services: K={0}'.format(self.K))
-        logging.info('Cost ratio: M={0}'.format(self.M))
 
         # Python 3.5 offers math.inf, which is equivalent to float('inf').
         try:
@@ -94,7 +90,7 @@ class EdgeCloud():
 
         self.reset()
 
-    def gen_het_services(self, stat=True, special=False, M=5):
+    def gen_het_services(self, special=False, M=5):
         self.M = dict()
         self.F = dict()
         self.W = dict()  # space requirement per service
@@ -112,12 +108,6 @@ class EdgeCloud():
                 self.M[s] = M
                 self.F[s] = 1
                 self.W[s] = 1
-        if stat:
-            # Inspect the heterogeneity.
-            F_cnt = [0] * 3
-            for f in self.F.items():
-                F_cnt[f - 1] += 1
-            logging.info('F freq counts: {}'.format(F_cnt))
 
     def reset(self):
         """Reset parameters updated by algorithms."""
@@ -409,30 +399,34 @@ def main():
                         help='number of services hosted by edge cloud '
                              '(default: 5)')
     parser.add_argument('-M', dest='M',
-                        type=parseNumRange, default=[5],
+                        type=float, default=None,
                         help='cost ratio of migration over forwarding '
-                             '(default: 5)')
+                             '(leave out for heterogeneous system)')
     parser.add_argument('-d', '--debug', dest='debug', action='store_true',
                         help='enable debug (default: disabled)')
 
     args = parser.parse_args()
 
-    if len(args.M) == 1 and len(args.K) == 1:
-        plot = False
-    elif len(args.M) == 1 or len(args.K) == 1:
-        # One of K and M is a list of integers.
-        plot = True
+    if args.M is None:
+        if len(args.K) > 1:
+            plot = True
+            fname_str = 'N{}-het-K{}_{}'.format(
+                args.N, args.K[0], args.K[-1])
+        else:
+            plot = False
+            fname_str = 'N{}-het-K{}'.format(
+                args.N, args.K[0])
     else:
-        # Both K and M are lists. Not supported.
-        raise Error('K and M are both ranges. Not supported!')
+        plot = False
+        fname_str = 'N{}-K{}-M{}-hom'.format(
+            args.N, args.K[0], args.M)
 
     # Configure logging.
     if args.debug:
         logging.basicConfig(
             level=logging.DEBUG,
             format='%(message)s',
-            filename='sim-N{}-K{}-M{}.log'.format(
-                args.N, args.K, args.M),
+            filename='sim-' + fname_str + '.log',
             filemode='w')
     else:
         logging.basicConfig(
@@ -449,8 +443,12 @@ def main():
         ('BM', []),
         ('RL', [])])
     for k in args.K:
-        ec = EdgeCloud('traces/requests-job_id.dat',
-                       K=k, N=args.N)
+        if args.M is None:
+            ec = EdgeCloud('traces/requests-job_id.dat',
+                           K=k, N=args.N)
+        else:
+            ec = EdgeCloud('traces/requests-job_id.dat',
+                           K=k, N=args.N, special=True, M=args.M)
 
         ec.run_static()
         costs['ST'].append(ec.get_cost())
@@ -488,9 +486,9 @@ def main():
                  linewidth=2.0)
     plt.xlabel(var_str)
     plt.ylabel('Cost')
+    plt.title('Heterogeneous System')
     plt.legend(loc='best')
-    fname = 'fig-N{}-het-{}{}_{}.pdf'.format(
-        args.N, var_str, var[0], var[-1])
+    fname = 'fig-' + fname_str + '.pdf'
     plt.savefig(fname, bbox_inches='tight')
 
 if __name__ == '__main__':
