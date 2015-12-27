@@ -356,29 +356,101 @@ class EdgeCloud():
     def run_static(self):
         """Offline static algorithm.
 
-        This algorithm migrates the K most popular services once and for all.
+        This algorithm migrates the most popular services in the beginning into
+        the edge cloud, and forwards all other services.
+
+        In the heterogeneous case, it uses dynamic programming to solve a
+        back packing problem, which maximizes the total frequency counts of
+        the most popular (i.e. wished) services, given that their total space
+        is no more than the edge cloud capacity.
         """
-        # FIXME
-        # Use dynamic programming to solve the back packing problem.
         self.reset()
-        # Find the K most popular services, and migrate them.
-        edge_services_wished = set(
-            x[0] for x in self.sorted_requests_cnt[0:self.K])
-        edge_services_migrated = edge_services_wished - self.edge_services
+        # LUT for static_value().
+        self.static_value_lut = defaultdict(lambda: (-1, []))
+        self.static_value_lut_cnt = 0
+        # Find the most popular services, and migrate them.
+        for y in range(self.N_unique):
+            for x in range(1, self.K + 1):
+                self.static_value(x, y)
+
+        v_ss_tuples = []
+        for key in self.static_value_lut.keys():
+            if 1 <= key[0] <= self.K and key[1] == self.N_unique - 1:
+                v_ss_tuples.append(self.static_value_lut[key])
+        # There might be multiple tuple reaching the maximum, but since their
+        # value (which implies system's forwarding cost) and migration cost
+        # are the same respectively, choosing either one should be fine.
+        (v, ss) = max(
+            v_ss_tuples,
+            key=lambda x: (x[0], -self.mig_cost(x[1])))
+
+        edge_services_wished = set(ss)
         self.migrations.append((
             1,
-            tuple(edge_services_migrated),
-            tuple(self.edge_services - edge_services_wished)))
-        # Sum of all services migrated.
-        for es in edge_services_migrated:
-            self.cost_migration += self.M[es]
+            self.fmt_services(edge_services_wished - self.edge_services),
+            self.fmt_services(self.edge_services - edge_services_wished)))
+        self.cost_migration = self.mig_cost(ss)
         # After migration, edge services are the ones we want.
-        self.cost_forwarding = 0
         self.edge_services = edge_services_wished
+
         for r in self.requests:
             if r not in self.edge_services:
                 self.cost_forwarding += self.F[r]
+
         self.cost = self.cost_migration + self.cost_forwarding
+
+    def mig_cost(self, services):
+        """Return the migration cost of services to be migrated.
+
+        We compare services with the ones in self.edge_services, and
+        find those really should be migrated, and then sum up their
+        migration cost.
+
+        :param services: an iterable of services to be migrated
+        """
+        edge_services_migrated = set(services) - self.edge_services
+        return sum(self.M[es] for es in edge_services_migrated)
+
+    def static_value(self, x, y):
+        """Calculate the value function of DP for offline static alg.
+
+        Value function V[x][y] := max total value with total weight x,
+        while only using items in y.
+
+        :param x: total weight constraint
+        :param y: largest index (in self.sorted_requests) of services
+                  which can be used
+        :return (v, ss) tuple of value achieved and services selected
+        """
+        # Use the LUT.
+        key = (x, y)
+        if (self.static_value_lut[key])[0] >= 0:
+            self.static_value_lut_cnt += 1
+            return self.static_value_lut[key]
+
+        # This may happen in recursive call. Mark the result invalid.
+        if y < 0 or x < 0:
+            res = (-math.inf, [])
+            self.static_value_lut[key] = res
+            return res
+
+        (s, V) = self.sorted_requests_cnt[y]
+        W = self.W[s]
+
+        # y == 0 means only the first item is considered.
+        # x == 0 means there is simply no space to fit in.
+        if y == 0 or x == 0:
+            if x >= W:
+                res = (V, [s])
+            else:
+                res = (0, [])
+            self.static_value_lut[key] = res
+            return res
+        assert y > 0 and x > 0
+        (v, ss) = self.static_value(x - W, y - 1)
+        res = max((v + V, ss + [s]), self.static_value(x, y - 1))
+        self.static_value_lut[key] = res
+        return res
 
     def print_migrations(self):
         format_str = '{0:>12}  {1!s:>25}  {2!s:>25}'
