@@ -12,7 +12,7 @@ import itertools
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
-import os.path as path
+from os import path
 
 
 class EdgeCloud():
@@ -548,21 +548,24 @@ def main():
         fname_str = 'v1'
     else:
         datafile = args.datafile
-        fname_str = path.basename(datafile).rstrip('.dat')
+        fname_str = path.splitext(path.basename(datafile))[0]
+
+    if args.N is not None:
+        fname_str += '-N{}'.format(args.N)
 
     if args.M is None:
         if len(args.K) > 1:
             plot = True
-            fname_str += 'N{}-het-K{}_{}'.format(
-                args.N, args.K[0], args.K[-1])
+            fname_str += '-het-K{}_{}'.format(
+                args.K[0], args.K[-1])
         else:
             plot = False
-            fname_str += 'N{}-het-K{}'.format(
-                args.N, args.K[0])
+            fname_str += '-het-K{}'.format(
+                args.K[0])
     else:
         plot = False
-        fname_str += 'N{}-K{}-M{}-hom'.format(
-            args.N, args.K[0], args.M)
+        fname_str += '-K{}-M{}-hom'.format(
+            args.K[0], args.M)
 
     # Configure logging.
     if args.debug:
