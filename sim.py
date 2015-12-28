@@ -12,6 +12,7 @@ import itertools
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
+import os.path as path
 
 
 class EdgeCloud():
@@ -536,21 +537,31 @@ def main():
                              '(leave out for heterogeneous system)')
     parser.add_argument('-d', '--debug', dest='debug', action='store_true',
                         help='enable debug (default: disabled)')
+    parser.add_argument('-f', dest='datafile', type=str, default=None,
+                        help='data file containing the sequence of requests '
+                        '(default: Google cluster data v1)')
 
     args = parser.parse_args()
+
+    if args.datafile is None:
+        datafile = 'traces/requests-job_id.dat'
+        fname_str = 'v1'
+    else:
+        datafile = args.datafile
+        fname_str = path.basename(datafile).rstrip('.dat')
 
     if args.M is None:
         if len(args.K) > 1:
             plot = True
-            fname_str = 'N{}-het-K{}_{}'.format(
+            fname_str += 'N{}-het-K{}_{}'.format(
                 args.N, args.K[0], args.K[-1])
         else:
             plot = False
-            fname_str = 'N{}-het-K{}'.format(
+            fname_str += 'N{}-het-K{}'.format(
                 args.N, args.K[0])
     else:
         plot = False
-        fname_str = 'N{}-K{}-M{}-hom'.format(
+        fname_str += 'N{}-K{}-M{}-hom'.format(
             args.N, args.K[0], args.M)
 
     # Configure logging.
@@ -576,11 +587,9 @@ def main():
         ('RL', [])])
     for k in args.K:
         if args.M is None:
-            ec = EdgeCloud('traces/requests-job_id.dat',
-                           K=k, N=args.N)
+            ec = EdgeCloud(datafile, K=k, N=args.N)
         else:
-            ec = EdgeCloud('traces/requests-job_id.dat',
-                           K=k, N=args.N, special=True, M=args.M)
+            ec = EdgeCloud(datafile, K=k, N=args.N, special=True, M=args.M)
 
         ec.run_static()
         costs['ST'].append(ec.get_cost())
