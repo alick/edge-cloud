@@ -676,11 +676,13 @@ def main():
 
     # Configure logging.
     if args.debug:
+        assert not plot
+        assert args.N is not None
         logging.basicConfig(
             level=logging.DEBUG,
             format='%(message)s',
             filename='sim-N{}-K{}-M{}.log'.format(
-                args.N, args.K, args.M),
+                args.N, args.K[0], args.M[0]),
             filemode='w')
     else:
         logging.basicConfig(
