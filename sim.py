@@ -109,6 +109,24 @@ class EdgeCloud():
         # Count the times of LUT hits.
         self.offline_opt_recursion_lut_cnt = 0
 
+    def run(self, alg):
+        if alg == 'BM':
+            self.run_belady(modified=True)
+        elif alg == 'ST':
+            self.run_static()
+        elif alg == 'IT':
+            self.run_offline_iterative()
+        elif alg == 'RL':
+            self.run_RL()
+        elif alg == 'OPT':
+            self.run_offline_opt()
+        elif alg == 'NM':
+            self.run_no_migration()
+        elif alg == 'BE':
+            self.run_belady(modified=False)
+        else:
+            raise Exception('Unknown algorithm: {}'.format(alg))
+
     def run_belady(self, modified=False, alg_time_threshold=60):
         """Bélády's algorithm or the clairvoyant algorithm.
 
@@ -686,34 +704,12 @@ def main():
         for m in args.M:
             ec = EdgeCloud('traces/requests-job_id.dat',
                            K=k, M=m, N=args.N)
-
-            ec.run_static()
-            costs['ST'].append(ec.get_cost())
-            ec.print_migrations()
-            logging.info('Total cost of {}: {}'
-                         .format(labels['ST'], ec.get_cost()))
-
-            ec.run_RL()
-            costs['RL'].append(ec.get_cost())
-            ec.print_migrations()
-            logging.info('Total cost of RL: {}'.format(ec.get_cost()))
-
-            ec.run_belady(modified=True)
-            costs['BM'].append(ec.get_cost())
-            ec.print_migrations()
-            logging.info('Total cost of Bélády Modified: {}'
-                         .format(ec.get_cost()))
-
-            ec.run_offline_iterative()
-            costs['IT'].append(ec.get_cost())
-            ec.print_migrations()
-            logging.info('Total cost of Iterative: {}'
-                         .format(ec.get_cost()))
-
-            ec.run_offline_opt()
-            costs['OPT'].append(ec.get_cost())
-            ec.print_migrations()
-            logging.info('Total cost of OPT: {}'.format(ec.get_cost()))
+            for alg in costs.keys():
+                ec.run(alg)
+                costs[alg].append(ec.get_cost())
+                ec.print_migrations()
+                logging.info('Total cost of {}: {}'
+                             .format(labels[alg], ec.get_cost()))
     for key in costs.keys():
         logging.info('{:5}{}'.format(key, costs[key]))
     if not plot:
