@@ -697,10 +697,10 @@ def main():
         'IT':  'Iterative',
         'OPT': 'OPT'}
     costs = OrderedDict([
-        ('ST', []),
         ('BM', []),
-        ('IT', []),
+        ('ST', []),
         ('RL', []),
+        ('IT', []),
         ('OPT', [])])
     for k in args.K:
         for m in args.M:
