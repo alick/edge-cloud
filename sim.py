@@ -302,7 +302,7 @@ class EdgeCloud():
         # Whether to record n in the debug log to indicate the progress.
         log_n = False
         # Estimated time (in seconds) needed to run the algorithm.
-        alg_time = (self.N_unique ** self.K) * self.K * self.N / (5e7)
+        alg_time = (self.N_unique ** self.K) * self.K * self.N / (1.5e5)
         if alg_time > 1:
             logging.info('alg_time={}'.format(alg_time))
         if alg_time > alg_time_threshold:
