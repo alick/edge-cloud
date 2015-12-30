@@ -13,6 +13,7 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 from os import path
+import re
 
 
 class EdgeCloud():
@@ -537,18 +538,29 @@ def main():
                              '(leave out for heterogeneous system)')
     parser.add_argument('-d', '--debug', dest='debug', action='store_true',
                         help='enable debug (default: disabled)')
-    parser.add_argument('-f', dest='datafile', type=str, default=None,
-                        help='data file containing the sequence of requests '
+    parser.add_argument('-f', dest='datafile', default=None, nargs='*',
+                        help='data file(s) with the sequence of requests '
                         '(default: Google cluster data v1)')
 
     args = parser.parse_args()
 
-    if args.datafile is None:
-        datafile = 'traces/requests-job_id.dat'
+    if args.datafile is None or len(args.datafile) <= 0:
+        args.datafile = ['traces/requests-job_id.dat']
         fname_str = 'v1'
     else:
-        datafile = args.datafile
-        fname_str = path.splitext(path.basename(datafile))[0]
+        # Get the part without directory nor suffix for each input file.
+        basename = [path.splitext(path.basename(f))[0] for f in args.datafile]
+        if len(basename) == 1:
+            fname_str = basename[0]
+        else:
+            matches = [re.match('\D*(\d+)(.*)', x) for x in basename]
+            if None in matches:
+                raise Exception('Filenames should contain numbers. '
+                                '(e.g. 0.dat, part-00-of-10.dat)')
+            start = matches[0].group(1)
+            end = matches[-1].group(1)
+            other = matches[0].group(2)
+            fname_str = '{}-{}{}'.format(start, end, other)
 
     if args.N is not None:
         fname_str += '-N{}'.format(args.N)
@@ -584,52 +596,86 @@ def main():
         'ST':  'Static',
         'BM':  'Bélády Mod',
         'RL':  'RL'}
+    N_file = len(args.datafile)
+    N_K = len(args.K)
+    A = np.ones((N_file, N_K), dtype=np.double) * np.nan
     costs = OrderedDict([
-        ('ST', []),
-        ('BM', []),
-        ('RL', [])])
-    for k in args.K:
-        if args.M is None:
-            ec = EdgeCloud(datafile, K=k, N=args.N)
-        else:
-            ec = EdgeCloud(datafile, K=k, N=args.N, special=True, M=args.M)
+        ('BM', np.copy(A)),
+        ('ST', np.copy(A)),
+        ('RL', np.copy(A))])
+    del A
+    for n_file in range(N_file):
+        datafile = args.datafile[n_file]
+        for n_K in range(N_K):
+            k = args.K[n_K]
+            if args.M is None:
+                ec = EdgeCloud(datafile, K=k, N=args.N)
+            else:
+                ec = EdgeCloud(datafile, K=k, N=args.N, special=True, M=args.M)
 
-        ec.run_static()
-        costs['ST'].append(ec.get_cost())
-        ec.print_migrations()
-        logging.info('Total cost of {}: {}'
-                     .format(labels['ST'], ec.get_cost()))
+            ec.run_static()
+            if N_file == 1:
+                costs['ST'][n_file, n_K] = ec.get_cost()
+            else:
+                costs['ST'][n_file, n_K] = ec.get_cost() / ec.N
+            ec.print_migrations()
+            logging.info('Cost of {}: {}'
+                         .format(labels['ST'], ec.get_cost()))
 
-        ec.run_RL()
-        costs['RL'].append(ec.get_cost())
-        ec.print_migrations()
-        logging.info('Total cost of RL: {}'.format(ec.get_cost()))
+            ec.run_RL()
+            if N_file == 1:
+                costs['RL'][n_file, n_K] = ec.get_cost()
+            else:
+                costs['RL'][n_file, n_K] = ec.get_cost() / ec.N
+            ec.print_migrations()
+            logging.info('Cost of RL: {}'.format(ec.get_cost()))
 
-        ec.run_belady(modified=True)
-        costs['BM'].append(ec.get_cost())
-        ec.print_migrations()
-        logging.info('Total cost of Bélády Modified: {}'
-                     .format(ec.get_cost()))
+            ec.run_belady(modified=True)
+            if N_file == 1:
+                costs['BM'][n_file, n_K] = ec.get_cost()
+            else:
+                costs['BM'][n_file, n_K] = ec.get_cost() / ec.N
+            ec.print_migrations()
+            logging.info('Cost of Bélády Modified: {}'
+                         .format(ec.get_cost()))
     for key in costs.keys():
-        logging.info('{:5}{}'.format(key, costs[key]))
+        logging.info('{}\n{}'.format(key, costs[key]))
     if not plot:
         return
     var = args.K
     var_str = 'K'
     styles = {
-        'ST': 'k.-',
-        'BM': 'bo-',
-        'RL': 'r*-'}
+        'ST': 'k.',
+        'BM': 'bo',
+        'RL': 'r*'}
     matplotlib.rcParams.update({'font.size': 16})
+    var = np.array(var, dtype=np.uint32)
     for key in costs.keys():
-        cost = np.array(costs[key], dtype=np.double)
-        mask = np.isfinite(cost)
-        var = np.array(var, dtype=np.uint32)
-        plt.plot(var[mask], cost[mask],
-                 styles[key], label=labels[key],
-                 linewidth=2.0)
+        costs_mat = costs[key]
+        if N_file == 1:
+            cost_list = [np.ravel(costs_mat)]
+            linestyles = ['-']
+        else:
+            cost_list = [np.ravel(np.nanmean(costs_mat, axis=0)),
+                         np.ravel(np.nanmax(costs_mat, axis=0)),
+                         np.ravel(np.nanmin(costs_mat, axis=0))]
+            linestyles = ['-', '--', ':']
+        for i in range(len(cost_list)):
+            cost = cost_list[i]
+            linestyle = linestyles[i]
+            if i == 0:
+                label = labels[key]
+            else:
+                label = ''
+            mask = np.isfinite(cost)
+            plt.plot(var[mask], cost[mask],
+                     styles[key] + linestyles[i], label=label,
+                     linewidth=2.0)
     plt.xlabel(var_str)
-    plt.ylabel('Cost')
+    if N_file == 1:
+        plt.ylabel('Cost')
+    else:
+        plt.ylabel('Cost Per Request')
     plt.title('Heterogeneous System')
     plt.legend(loc='best')
     fname = 'fig-' + fname_str + '.pdf'
