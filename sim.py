@@ -683,7 +683,8 @@ def main():
                     ec = EdgeCloud(datafile, K=k, N=args.N,
                                    max_time=args.max_time)
                 else:
-                    ec = EdgeCloud(datafile, K=k, N=args.N, special=True, M=args.M,
+                    ec = EdgeCloud(datafile, K=k, N=args.N,
+                                   special=True, M=args.M,
                                    max_time=args.max_time)
 
                 for alg in labels.keys():
