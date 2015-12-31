@@ -430,7 +430,7 @@ class EdgeCloud():
         self.offline_opt_recursion_lut[key] = res
         return res
 
-    def run_offline_iterative(self, alg_time_threshold=60):
+    def run_offline_iterative(self, alg_time_threshold=60, max_mem=None):
         """Offline iterative algorithm.
 
         The algorithm runs offline optimal algorithm iteratively, each time
@@ -452,9 +452,23 @@ class EdgeCloud():
             self.cost = None
             return
 
+        if max_mem is None:
+            max_mem = self.max_mem
+        # LUT size assuming each (key, value) pair takes up 100 Bytes,
+        # plus the size of edge_services_matrix
+        alg_mem = (self.N_unique) * 2 * 100 + self.N * self.K * 4
+        if alg_mem > 0.1 * max_mem:
+            logging.info('alg_mem={:.2e}'.format(alg_mem))
+        if alg_mem > max_mem:
+            logging.warning('OPT is very likely to exceed the memory '
+                            'threshold so it is skipped. '
+                            'Increase max_mem if you really '
+                            'want to run it.')
+            self.cost = None
+            return
+
         # LUT for offline_iterative_cost function.
         self.offline_iterative_cost_lut = defaultdict(lambda: (-1, []))
-        self.offline_iterative_cost_lut_cnt = 0
         # Matrix whose (k, n)-th element denotes the edge service in k-th
         # position after n-th arrival.
         self.edge_services_matrix = np.zeros((self.K, self.N + 1),
@@ -465,9 +479,15 @@ class EdgeCloud():
             for n in range(self.N + 1):
                 for s in self.services:
                     self.offline_iterative_cost(k, n, s)
+                # LUT prev <= current
+                for key in self.offline_iterative_cost_lut:
+                    if key[0] == 1:
+                        self.offline_iterative_cost_lut[(0,) + key[1:]] = \
+                            self.offline_iterative_cost_lut[key]
+                        self.offline_iterative_cost_lut[key] = (-1, [])
             c_e_m_tuples = []
             for key in self.offline_iterative_cost_lut.keys():
-                if key[0] == k and key[1] == self.N:
+                if key[0] == 0:
                     c_e_m_tuples.append(
                         self.offline_iterative_cost_lut[key])
             # Find the one with minimum cost.
@@ -505,7 +525,7 @@ class EdgeCloud():
         self.cost = self.cost_migration + self.cost_forwarding
 
     def offline_iterative_cost(self, k, n, s):
-        """Calculate the cost of offline iterative algorithm recursively.
+        """Calculate the cost of offline iterative algorithm with LUT.
 
         :param k: position of the service s in the edge cloud storage (1..K)
         :param n: sequence number of the request arrival
@@ -518,11 +538,8 @@ class EdgeCloud():
                   L_k stores the service s after the n-th arrival.
         """
 
-        # Use the LUT.
-        key = (k, n, s)
-        if (self.offline_iterative_cost_lut[key])[0] >= 0:
-            self.offline_iterative_cost_lut_cnt += 1
-            return self.offline_iterative_cost_lut[key]
+        key = (1, s)
+        key_prev = (0, s)
 
         if (n <= 0):
             if s == self.edge_services_matrix[k - 1, 0]:
@@ -530,27 +547,30 @@ class EdgeCloud():
             else:
                 res = (math.inf, [s], 0)
             self.offline_iterative_cost_lut[key] = res
+            # Initialize LUT prev too to avoid dict size change at runtime.
+            self.offline_iterative_cost_lut[key_prev] = res
             return res
 
         r = self.requests[n - 1]
+        (c, e, m) = self.offline_iterative_cost_lut[key_prev]
         if s != r:
             # r is forwarded if r is not in storage 1 to k-1,
             # otherwise r is hosted for sure.
             # In both cases, s should be here after the previous arrival,
             # and stay here after the n-th arrival.
-            (c, e, m) = self.offline_iterative_cost(k, n - 1, s)
             if r not in self.edge_services_matrix[0:k - 1, n]:
-                c += 1
-            res = (c, e + [s], m)
+                res = (c + 1, e + [s], m)
+            else:
+                res = (c, e + [s], m)
             self.offline_iterative_cost_lut[key] = res
             return res
         assert r == s
         # Now we know s is the same as r, which means s was here after (n-1)-th
         # arrival already, or there is a migration after n-th arrival.
-        [c, e, m] = self.offline_iterative_cost(k, n - 1, s)
         svc_tuples = [(c, e + [s], m)]
         for svc in self.services - set([s]):
-            (c, e, m) = self.offline_iterative_cost(k, n - 1, svc)
+            key_tmp = (0, svc)
+            (c, e, m) = self.offline_iterative_cost_lut[key_tmp]
             svc_tuples.append((c + self.M, e + [s], m + 1))
         # Find the one with minimum cost.
         # If tie: select the one with maximum number of migrations,
