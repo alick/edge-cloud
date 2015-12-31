@@ -12,6 +12,7 @@ import itertools
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
+import random
 
 
 class EdgeCloud():
@@ -119,6 +120,8 @@ class EdgeCloud():
             self.run_static()
         elif alg == 'IT':
             self.run_offline_iterative()
+        elif alg == 'RN':
+            self.run_online_randomized()
         elif alg == 'RL':
             self.run_RL()
         elif alg == 'OPT':
@@ -203,6 +206,36 @@ class EdgeCloud():
                 assert modified
                 self.cost_forwarding += 1
                 logging.debug('result: forwarded'.format(r))
+        self.cost = self.cost_migration + self.cost_forwarding
+
+    def run_online_randomized(self):
+        """The Online Randomized algorithm.
+
+        The algorithm migrates a service with probability 1/M, and
+        deletes a random service in the edge cloud uniformly.
+        """
+        self.reset()
+
+        n = 0
+        for r in self.requests:
+            n += 1
+            logging.debug('n={}, request={}'.format(n, r))
+            if r in self.edge_services:
+                # r will be hosted by the edge cloud immediately. No cost.
+                logging.debug('result: hosted')
+                continue
+            if random.random() > 1 / self.M:
+                # No migration. Forwarding.
+                self.cost_forwarding += 1
+                logging.debug('result: forwarded')
+                continue
+            # Find a service to delete randomly.
+            s_del = random.choice(tuple(self.edge_services))
+            self.edge_services.remove(s_del)
+            self.edge_services.add(r)
+            self.migrations.append((n, r, s_del))
+            self.cost_migration += self.M
+            logging.debug('result: migrated. ({} deleted)'.format(s_del))
         self.cost = self.cost_migration + self.cost_forwarding
 
     def run_RL(self, max_time=None):
@@ -744,10 +777,12 @@ def main():
     labels = {
         'ST':  'Static',
         'BM':  'Bélády Mod',
+        'RN':  'Randomized',
         'RL':  'RL',
         'IT':  'Iterative',
         'OPT': 'OPT'}
     costs = OrderedDict([
+        ('RN', []),
         ('BM', []),
         ('ST', []),
         ('RL', []),
@@ -759,11 +794,18 @@ def main():
                            K=k, M=m, N=args.N,
                            max_time=args.max_time, max_mem=args.max_mem)
             for alg in costs.keys():
-                ec.run(alg)
-                costs[alg].append(ec.get_cost())
-                ec.print_migrations()
-                logging.info('Total cost of {}: {}'
-                             .format(labels[alg], ec.get_cost()))
+                if alg != 'RN':
+                    N_run = 1
+                else:
+                    N_run = 10
+                cost_array = np.ones((1, N_run)) * np.nan
+                for n in range(N_run):
+                    ec.run(alg)
+                    ec.print_migrations()
+                    logging.info('Total cost of {}: {}'
+                                 .format(labels[alg], ec.get_cost()))
+                    cost_array[0, n] = ec.get_cost()
+                costs[alg].append(np.nanmean(cost_array))
     for key in costs.keys():
         logging.info('{:5}{}'.format(key, costs[key]))
     if not plot:
@@ -782,6 +824,7 @@ def main():
         'ST': 'k.-',
         'BM': 'bo-',
         'IT': 'g^-',
+        'RN': 'cx-',
         'RL': 'r*-',
         'OPT': 'md-'}
     matplotlib.rcParams.update({'font.size': 16})

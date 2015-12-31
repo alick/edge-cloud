@@ -4,6 +4,7 @@
 
 from sim import EdgeCloud, parseNumRange
 import pytest
+import random
 
 
 class TestEdgeCloud:
@@ -43,6 +44,12 @@ class TestEdgeCloud:
         assert len(ec.migrations) == 2
         assert ec.migrations[0][0] == 5
         assert ec.cost_forwarding > 0
+
+    def test_online_randomized(self, ec):
+        random.seed(0)
+        ec.run_online_randomized()
+        assert ec.get_cost() == 4485
+        assert len(ec.migrations) == 500
 
     def test_RL(self, ec):
         ec.run_RL()
