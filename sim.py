@@ -13,6 +13,7 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 import random
+import re
 
 
 class EdgeCloud():
@@ -746,14 +747,51 @@ def main():
     parser.add_argument('--max-mem', dest='max_mem', type=float, default=1e9,
                         help='maximum memory in bytes to run each algorithm '
                              '(default: 1e9)')
+    parser.add_argument('-f', dest='datafile', default=None, nargs='*',
+                        help='data file(s) with the sequence of requests '
+                        '(default: Google cluster data v1)')
 
     args = parser.parse_args()
 
+    if args.datafile is None or len(args.datafile) <= 0:
+        args.datafile = ['traces/requests-job_id.dat']
+        fname_str = 'v1'
+    else:
+        # Get the part without directory nor suffix for each input file.
+        basename = [path.splitext(path.basename(f))[0] for f in args.datafile]
+        if len(basename) == 1:
+            fname_str = basename[0]
+        else:
+            matches = [re.match('\D*(\d+)(.*)', x) for x in basename]
+            if None in matches:
+                raise Exception('Filenames should contain numbers. '
+                                '(e.g. 0.dat, part-00-of-10.dat)')
+            start = matches[0].group(1)
+            end = matches[-1].group(1)
+            other = matches[0].group(2)
+            fname_str = '{}-{}{}'.format(start, end, other)
+
+    if args.N is not None:
+        fname_str += '-N{}'.format(args.N)
+
     if len(args.M) == 1 and len(args.K) == 1:
         plot = False
+        fname_str += '-K{}-M{}'.format(args.K[0], args.M[0])
     elif len(args.M) == 1 or len(args.K) == 1:
         # One of K and M is a list of integers.
+        if len(args.M) > len(args.K):
+            var = args.M
+            con = args.K[0]
+            var_str = 'M'
+            con_str = 'K'
+        else:
+            var = args.K
+            con = args.M[0]
+            var_str = 'K'
+            con_str = 'M'
         plot = True
+        fname_str += '-{}{}-{}{}_{}'.format(
+            con_str, con, var_str, var[0], var[-1])
     else:
         # Both K and M are lists. Not supported.
         raise Error('K and M are both ranges. Not supported!')
@@ -810,16 +848,6 @@ def main():
         logging.info('{:5}{}'.format(key, costs[key]))
     if not plot:
         return
-    if len(args.M) > len(args.K):
-        var = args.M
-        con = args.K[0]
-        var_str = 'M'
-        con_str = 'K'
-    else:
-        var = args.K
-        con = args.M[0]
-        var_str = 'K'
-        con_str = 'M'
     styles = {
         'ST': 'k.-',
         'BM': 'bo-',
@@ -846,8 +874,7 @@ def main():
         plt.ylim(2000, 16000)
     plt.title(con_str + '={}'.format(con))
     plt.legend(loc='best')
-    fname = 'fig-N{}-{}{}-{}{}_{}.pdf'.format(
-        args.N, con_str, con, var_str, var[0], var[-1])
+    fname = 'fig-' + fname_str + '.pdf'
     plt.savefig(fname, bbox_inches='tight')
 
 if __name__ == '__main__':
