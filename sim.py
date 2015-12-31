@@ -14,12 +14,14 @@ import matplotlib
 import matplotlib.pyplot as plt
 from os import path
 import re
+import random
 
 
 class EdgeCloud():
     """The EdgeCloud class holds all the magic."""
 
-    def __init__(self, path_to_file, K=5, N=None, special=False, M=5):
+    def __init__(self, path_to_file, K=5, N=None, special=False, M=5,
+                 max_time=60):
         """Initialize with a file containing the sequence of requests.
 
         :param path_to_file: string to specify the path to the file
@@ -41,6 +43,7 @@ class EdgeCloud():
         else:
             raise Exception('The parameter N should be '
                             'a positive integer or None.')
+        self.max_time = max_time
         self.requests = []
         with open(path_to_file, 'r') as f:
             if self.N is None:
@@ -142,7 +145,23 @@ class EdgeCloud():
         # Count the times of LUT hits.
         self.offline_opt_recursion_lut_cnt = 0
 
-    def run_belady(self, modified=False, alg_time_threshold=60):
+    def run(self, alg):
+        if alg == 'BM':
+            self.run_belady(modified=True)
+        elif alg == 'ST':
+            self.run_static()
+        elif alg == 'RN':
+            self.run_online_randomized()
+        elif alg == 'RL':
+            self.run_RL()
+        elif alg == 'NM':
+            self.run_no_migration()
+        elif alg == 'BE':
+            self.run_belady(modified=False)
+        else:
+            raise Exception('Unknown algorithm: {}'.format(alg))
+
+    def run_belady(self, modified=False, max_time=None):
         """Bélády's algorithm or the clairvoyant algorithm.
 
         The (unmodified) algorithm always migrate a missing service,
@@ -163,17 +182,19 @@ class EdgeCloud():
         alg_name = 'Bélády'
         if modified:
             alg_name += ' Modified'
+        if max_time is None:
+            max_time = self.max_time
         # Estimated time (in seconds) needed to run the algorithm.
         # Seems that (K+1)-multiple search in list.index() is
         # optimized, so no multiplication by K in calculation below.
         alg_time = (self.N ** 2) / (2.5e8)
         if alg_time > 1:
             logging.info('alg_time={}'.format(alg_time))
-        if alg_time > alg_time_threshold:
+        if alg_time > max_time:
             # Mark invalid cost.
             logging.warning('{} is very likely to exceed the time '
                             'threshold so it is skipped. '
-                            'Increase alg_time_threshold if you really '
+                            'Increase max_time if you really '
                             'want to run it.'.format(alg_name))
             self.cost = None
             return
@@ -252,7 +273,45 @@ class EdgeCloud():
             logging.debug('result: migrated. ({} deleted)'.format(ss_del))
         self.cost = self.cost_migration + self.cost_forwarding
 
-    def run_RL(self, alg_time_threshold=60):
+    def run_online_randomized(self):
+        """The Online Randomized algorithm.
+
+        The algorithm migrates a service with probability 1/M, and
+        deletes a random service in the edge cloud uniformly.
+        """
+        self.reset()
+
+        n = 0
+        for r in self.requests:
+            n += 1
+            W_new = self.W[r]
+            logging.debug(
+                'n={}, request={}, M={}, F={}, W={}, K_rem={}'
+                .format(n, r, self.M[r], self.F[r], self.W[r], self.K_rem))
+            if r in self.edge_services:
+                # r will be hosted by the edge cloud immediately. No cost.
+                logging.debug('result: hosted')
+                continue
+            if random.random() > self.F[r] / self.M[r] or W_new > self.K:
+                # No migration. Forwarding.
+                self.cost_forwarding += self.F[r]
+                logging.debug('result: forwarded')
+                continue
+            # Delete zero or more services randomly.
+            ss_del = []
+            while self.K_rem < W_new:
+                s_del = random.choice(tuple(self.edge_services))
+                ss_del.append(s_del)
+                self.edge_services.remove(s_del)
+                self.K_rem += self.W[s_del]
+            self.edge_services.add(r)
+            self.K_rem -= W_new
+            self.migrations.append((n, r, self.fmt_services(ss_del)))
+            self.cost_migration += self.M[r]
+            logging.debug('result: migrated. ({} deleted)'.format(ss_del))
+        self.cost = self.cost_migration + self.cost_forwarding
+
+    def run_RL(self, max_time=None):
         """The RM-LRU (RL) Online algorithm.
 
         The algorithm combines a retrospective migration (RM) policy and a
@@ -260,15 +319,17 @@ class EdgeCloud():
         """
         self.reset()
 
+        if max_time is None:
+            max_time = self.max_time
         # Estimated time (in seconds) needed to run the algorithm.
         alg_time = self.N_unique * self.N / (1.6e7)
         if alg_time > 1:
             logging.info('alg_time={}'.format(alg_time))
-        if alg_time > alg_time_threshold:
+        if alg_time > max_time:
             # Mark invalid cost.
             logging.warning('RL is very likely to exceed the time '
                             'threshold so it is skipped. '
-                            'Increase alg_time_threshold if you really '
+                            'Increase max_time if you really '
                             'want to run it.')
             self.cost = None
             return
@@ -538,6 +599,9 @@ def main():
                              '(leave out for heterogeneous system)')
     parser.add_argument('-d', '--debug', dest='debug', action='store_true',
                         help='enable debug (default: disabled)')
+    parser.add_argument('--max-time', dest='max_time', type=int, default=60,
+                        help='maximum time in seconds to run each algorithm '
+                             '(default: 60)')
     parser.add_argument('-f', dest='datafile', default=None, nargs='*',
                         help='data file(s) with the sequence of requests '
                         '(default: Google cluster data v1)')
@@ -593,6 +657,7 @@ def main():
             format='%(message)s')
 
     labels = {
+        'RN':  'Randomized',
         'ST':  'Static',
         'BM':  'Bélády Mod',
         'RL':  'RL'}
@@ -600,6 +665,7 @@ def main():
     N_K = len(args.K)
     A = np.ones((N_file, N_K), dtype=np.double) * np.nan
     costs = OrderedDict([
+        ('RN', np.copy(A)),
         ('BM', np.copy(A)),
         ('ST', np.copy(A)),
         ('RL', np.copy(A))])
@@ -609,35 +675,28 @@ def main():
         for n_K in range(N_K):
             k = args.K[n_K]
             if args.M is None:
-                ec = EdgeCloud(datafile, K=k, N=args.N)
+                ec = EdgeCloud(datafile, K=k, N=args.N,
+                               max_time=args.max_time)
             else:
-                ec = EdgeCloud(datafile, K=k, N=args.N, special=True, M=args.M)
+                ec = EdgeCloud(datafile, K=k, N=args.N, special=True, M=args.M,
+                               max_time=args.max_time)
 
-            ec.run_static()
-            if N_file == 1:
-                costs['ST'][n_file, n_K] = ec.get_cost()
-            else:
-                costs['ST'][n_file, n_K] = ec.get_cost() / ec.N
-            ec.print_migrations()
-            logging.info('Cost of {}: {}'
-                         .format(labels['ST'], ec.get_cost()))
-
-            ec.run_RL()
-            if N_file == 1:
-                costs['RL'][n_file, n_K] = ec.get_cost()
-            else:
-                costs['RL'][n_file, n_K] = ec.get_cost() / ec.N
-            ec.print_migrations()
-            logging.info('Cost of RL: {}'.format(ec.get_cost()))
-
-            ec.run_belady(modified=True)
-            if N_file == 1:
-                costs['BM'][n_file, n_K] = ec.get_cost()
-            else:
-                costs['BM'][n_file, n_K] = ec.get_cost() / ec.N
-            ec.print_migrations()
-            logging.info('Cost of Bélády Modified: {}'
-                         .format(ec.get_cost()))
+            for alg in costs.keys():
+                if alg != 'RN':
+                    N_run = 1
+                else:
+                    N_run = 10
+                cost_array = np.array([np.nan] * N_run)
+                for n_run in range(N_run):
+                    ec.run(alg)
+                    ec.print_migrations()
+                    logging.info('Total cost of {}: {}'
+                                 .format(labels[alg], ec.get_cost()))
+                    cost_array[n_run] = ec.get_cost()
+                if N_file == 1:
+                    costs[alg][n_file, n_K] = np.nanmean(cost_array)
+                else:
+                    costs[alg][n_file, n_K] = np.nanmean(cost_array) / ec.N
     for key in costs.keys():
         logging.info('{}\n{}'.format(key, costs[key]))
     if not plot:
@@ -645,6 +704,7 @@ def main():
     var = args.K
     var_str = 'K'
     styles = {
+        'RN': 'cx-',
         'ST': 'k.',
         'BM': 'bo',
         'RL': 'r*'}
