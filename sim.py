@@ -863,7 +863,7 @@ def main():
     else:
         costs = np.load(npzfile)
     for key in labels.keys():
-        logging.info('{:5}{}'.format(key, costs[key]))
+        logging.info('{}\n{}'.format(key, costs[key]))
     if not plot:
         return
     styles = {
@@ -894,7 +894,7 @@ def main():
                 label = ''
             mask = np.isfinite(cost)
             plt.plot(var[mask], cost[mask],
-                     styles[key] + linestyles[i] , label=label,
+                     styles[key] + linestyles[i], label=label,
                      linewidth=2.0)
     plt.xlabel(var_str)
     plt.ylabel('Cost')
