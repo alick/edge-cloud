@@ -17,7 +17,8 @@ import matplotlib.pyplot as plt
 class EdgeCloud():
     """The EdgeCloud class holds all the magic."""
 
-    def __init__(self, path_to_file, K=5, M=5, N=None, max_mem=1e9):
+    def __init__(self, path_to_file, K=5, M=5, N=None,
+                 max_time=60, max_mem=1e9):
         """Initialize with a file containing the sequence of requests.
 
         :param path_to_file: string to specify the path to the file
@@ -41,6 +42,7 @@ class EdgeCloud():
         else:
             raise Exception('The parameter N should be '
                             'a positive integer or None.')
+        self.max_time = max_time
         self.max_mem = max_mem
         self.requests = []
         with open(path_to_file, 'r') as f:
@@ -128,7 +130,7 @@ class EdgeCloud():
         else:
             raise Exception('Unknown algorithm: {}'.format(alg))
 
-    def run_belady(self, modified=False, alg_time_threshold=60):
+    def run_belady(self, modified=False, max_time=None):
         """Bélády's algorithm or the clairvoyant algorithm.
 
         The (unmodified) algorithm always migrate a missing service,
@@ -149,17 +151,19 @@ class EdgeCloud():
         alg_name = 'Bélády'
         if modified:
             alg_name += ' Modified'
+        if max_time is None:
+            max_time = self.max_time
         # Estimated time (in seconds) needed to run the algorithm.
         # Seems that (K+1)-multiple search in list.index() is
         # optimized, so no multiplication by K in calculation below.
         alg_time = (self.N ** 2) / (2.5e8)
         if alg_time > 1:
             logging.info('alg_time={}'.format(alg_time))
-        if alg_time > alg_time_threshold:
+        if alg_time > max_time:
             # Mark invalid cost.
             logging.warning('{} is very likely to exceed the time '
                             'threshold so it is skipped. '
-                            'Increase alg_time_threshold if you really '
+                            'Increase max_time if you really '
                             'want to run it.'.format(alg_name))
             self.cost = None
             return
@@ -201,7 +205,7 @@ class EdgeCloud():
                 logging.debug('result: forwarded'.format(r))
         self.cost = self.cost_migration + self.cost_forwarding
 
-    def run_RL(self, alg_time_threshold=60):
+    def run_RL(self, max_time=None):
         """The RM-LRU (RL) Online algorithm.
 
         The algorithm combines a retrospective migration (RM) policy and a
@@ -209,15 +213,17 @@ class EdgeCloud():
         """
         self.reset()
 
+        if max_time is None:
+            max_time = self.max_time
         # Estimated time (in seconds) needed to run the algorithm.
         alg_time = self.N_unique * self.N / (1.6e7)
         if alg_time > 1:
             logging.info('alg_time={}'.format(alg_time))
-        if alg_time > alg_time_threshold:
+        if alg_time > max_time:
             # Mark invalid cost.
             logging.warning('RL is very likely to exceed the time '
                             'threshold so it is skipped. '
-                            'Increase alg_time_threshold if you really '
+                            'Increase max_time if you really '
                             'want to run it.')
             self.cost = None
             return
@@ -288,13 +294,13 @@ class EdgeCloud():
             seqnum_del[svc_del] = n
         self.cost = self.cost_migration + self.cost_forwarding
 
-    def run_offline_opt(self, alg_time_threshold=60, max_mem=None):
+    def run_offline_opt(self, max_time=None, max_mem=None):
         """Offline optimal (OPT) algorithm.
 
         The algorithm calls the offline_opt_recursion routine to find the
         optimal solution. Its time complexity is roughly O(K^N).
 
-        :param alg_time_threshold: estimated allowable time to run the
+        :param max_time: estimated allowable time to run the
                                    OPT algorithm (default 60s)
         """
 
@@ -302,19 +308,21 @@ class EdgeCloud():
 
         # Whether to record n in the debug log to indicate the progress.
         log_n = False
+        if max_time is None:
+            max_time = self.max_time
         # Estimated time (in seconds) needed to run the algorithm.
         alg_time = (self.N_unique ** self.K) * self.K * self.N / (1.5e5)
         if alg_time > 1:
             logging.info('alg_time={}'.format(alg_time))
-        if alg_time > alg_time_threshold:
+        if alg_time > max_time:
             # Mark invalid cost.
             logging.warning('OPT is very likely to exceed the time '
                             'threshold so it is skipped. '
-                            'Increase alg_time_threshold if you really '
+                            'Increase max_time if you really '
                             'want to run it.')
             self.cost = None
             return
-        elif alg_time > (alg_time_threshold * 0.5):
+        elif alg_time > (max_time * 0.5):
             log_n = True
             logging.warning('OPT can be quite time consuming! '
                             'Progress will be displayed.')
@@ -430,7 +438,7 @@ class EdgeCloud():
         self.offline_opt_recursion_lut[key] = res
         return res
 
-    def run_offline_iterative(self, alg_time_threshold=60, max_mem=None):
+    def run_offline_iterative(self, max_time=None, max_mem=None):
         """Offline iterative algorithm.
 
         The algorithm runs offline optimal algorithm iteratively, each time
@@ -438,16 +446,18 @@ class EdgeCloud():
         """
         self.reset()
 
+        if max_time is None:
+            max_time = self.max_time
         # Estimated time (in seconds) needed to run the algorithm.
         alg_time = (self.N_unique ** 2) * self.K * self.N / (1e7)
         if alg_time > 1:
             logging.info('alg_time={:.3f}'.format(alg_time))
-        if alg_time > alg_time_threshold:
+        if alg_time > max_time:
             # Mark invalid cost.
             logging.warning('Offline Iterative is very likely to '
                             'exceed the time '
                             'threshold so it is skipped. '
-                            'Increase alg_time_threshold if you really '
+                            'Increase max_time if you really '
                             'want to run it.')
             self.cost = None
             return
@@ -697,6 +707,12 @@ def main():
                              '(default: 5)')
     parser.add_argument('-d', '--debug', dest='debug', action='store_true',
                         help='enable debug (default: disabled)')
+    parser.add_argument('--max-time', dest='max_time', type=int, default=60,
+                        help='maximum time in seconds to run each algorithm '
+                             '(default: 60)')
+    parser.add_argument('--max-mem', dest='max_mem', type=float, default=1e9,
+                        help='maximum memory in bytes to run each algorithm '
+                             '(default: 1e9)')
 
     args = parser.parse_args()
 
@@ -740,7 +756,8 @@ def main():
     for k in args.K:
         for m in args.M:
             ec = EdgeCloud('traces/requests-job_id.dat',
-                           K=k, M=m, N=args.N)
+                           K=k, M=m, N=args.N,
+                           max_time=args.max_time, max_mem=args.max_mem)
             for alg in costs.keys():
                 ec.run(alg)
                 costs[alg].append(ec.get_cost())
