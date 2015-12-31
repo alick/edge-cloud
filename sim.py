@@ -605,6 +605,9 @@ def main():
     parser.add_argument('-f', dest='datafile', default=None, nargs='*',
                         help='data file(s) with the sequence of requests '
                         '(default: Google cluster data v1)')
+    parser.add_argument('-l', '--load', dest='load', action='store_true',
+                        help='load previously saved result directly '
+                        '(default: False)')
 
     args = parser.parse_args()
 
@@ -656,61 +659,66 @@ def main():
             stream=sys.stdout,
             format='%(message)s')
 
-    labels = {
-        'RN':  'Randomized',
-        'ST':  'Static',
-        'BM':  'Bélády Mod',
-        'RL':  'RL'}
+    labels = OrderedDict([
+        ('RN', 'Randomized'),
+        ('BM', 'Bélády Mod'),
+        ('ST', 'Static'),
+        ('RL', 'RL')])
     N_file = len(args.datafile)
-    N_K = len(args.K)
-    A = np.ones((N_file, N_K), dtype=np.double) * np.nan
-    costs = OrderedDict([
-        ('RN', np.copy(A)),
-        ('BM', np.copy(A)),
-        ('ST', np.copy(A)),
-        ('RL', np.copy(A))])
-    del A
-    for n_file in range(N_file):
-        datafile = args.datafile[n_file]
-        for n_K in range(N_K):
-            k = args.K[n_K]
-            if args.M is None:
-                ec = EdgeCloud(datafile, K=k, N=args.N,
-                               max_time=args.max_time)
-            else:
-                ec = EdgeCloud(datafile, K=k, N=args.N, special=True, M=args.M,
-                               max_time=args.max_time)
+    npzfile = 'dat-' + fname_str + '.npz'
+    if not args.load:
+        N_K = len(args.K)
+        A = np.ones((N_file, N_K), dtype=np.double) * np.nan
+        costs = OrderedDict([
+            ('RN', A.copy()),
+            ('BM', A.copy()),
+            ('ST', A.copy()),
+            ('RL', A.copy())])
+        del A
+        for n_file in range(N_file):
+            datafile = args.datafile[n_file]
+            for n_K in range(N_K):
+                k = args.K[n_K]
+                if args.M is None:
+                    ec = EdgeCloud(datafile, K=k, N=args.N,
+                                   max_time=args.max_time)
+                else:
+                    ec = EdgeCloud(datafile, K=k, N=args.N, special=True, M=args.M,
+                                   max_time=args.max_time)
 
-            for alg in costs.keys():
-                if alg != 'RN':
-                    N_run = 1
-                else:
-                    N_run = 10
-                cost_array = np.array([np.nan] * N_run)
-                for n_run in range(N_run):
-                    ec.run(alg)
-                    ec.print_migrations()
-                    logging.info('Total cost of {}: {}'
-                                 .format(labels[alg], ec.get_cost()))
-                    cost_array[n_run] = ec.get_cost()
-                if N_file == 1:
-                    costs[alg][n_file, n_K] = np.nanmean(cost_array)
-                else:
-                    costs[alg][n_file, n_K] = np.nanmean(cost_array) / ec.N
-    for key in costs.keys():
+                for alg in labels.keys():
+                    if alg != 'RN':
+                        N_run = 1
+                    else:
+                        N_run = 10
+                    cost_array = np.array([np.nan] * N_run)
+                    for n_run in range(N_run):
+                        ec.run(alg)
+                        ec.print_migrations()
+                        logging.info('Total cost of {}: {}'
+                                     .format(labels[alg], ec.get_cost()))
+                        cost_array[n_run] = ec.get_cost()
+                    if N_file == 1:
+                        costs[alg][n_file, n_K] = np.nanmean(cost_array)
+                    else:
+                        costs[alg][n_file, n_K] = np.nanmean(cost_array) / ec.N
+        np.savez(npzfile, **costs)
+    else:
+        costs = np.load(npzfile)
+    for key in labels.keys():
         logging.info('{}\n{}'.format(key, costs[key]))
     if not plot:
         return
     var = args.K
     var_str = 'K'
     styles = {
-        'RN': 'cx-',
+        'RN': 'cx',
         'ST': 'k.',
         'BM': 'bo',
         'RL': 'r*'}
     matplotlib.rcParams.update({'font.size': 16})
     var = np.array(var, dtype=np.uint32)
-    for key in costs.keys():
+    for key in labels.keys():
         costs_mat = costs[key]
         if N_file == 1:
             cost_list = [np.ravel(costs_mat)]
