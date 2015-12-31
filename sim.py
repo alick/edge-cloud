@@ -750,6 +750,9 @@ def main():
     parser.add_argument('-f', dest='datafile', default=None, nargs='*',
                         help='data file(s) with the sequence of requests '
                         '(default: Google cluster data v1)')
+    parser.add_argument('-l', '--load', dest='load', action='store_true',
+                        help='load previously saved result directly '
+                        '(default: False)')
 
     args = parser.parse_args()
 
@@ -812,57 +815,87 @@ def main():
             stream=sys.stdout,
             format='%(message)s')
 
-    labels = {
-        'ST':  'Static',
-        'BM':  'Bélády Mod',
-        'RN':  'Randomized',
-        'RL':  'RL',
-        'IT':  'Iterative',
-        'OPT': 'OPT'}
-    costs = OrderedDict([
-        ('RN', []),
-        ('BM', []),
-        ('ST', []),
-        ('RL', []),
-        ('IT', []),
-        ('OPT', [])])
-    for k in args.K:
-        for m in args.M:
-            ec = EdgeCloud('traces/requests-job_id.dat',
-                           K=k, M=m, N=args.N,
-                           max_time=args.max_time, max_mem=args.max_mem)
-            for alg in costs.keys():
-                if alg != 'RN':
-                    N_run = 1
-                else:
-                    N_run = 10
-                cost_array = np.ones((1, N_run)) * np.nan
-                for n in range(N_run):
-                    ec.run(alg)
-                    ec.print_migrations()
-                    logging.info('Total cost of {}: {}'
-                                 .format(labels[alg], ec.get_cost()))
-                    cost_array[0, n] = ec.get_cost()
-                costs[alg].append(np.nanmean(cost_array))
-    for key in costs.keys():
+    labels = OrderedDict([
+        ('RN', 'Randomized'),
+        ('BM', 'Bélády Mod'),
+        ('ST', 'Static'),
+        ('RL', 'RL'),
+        ('IT', 'Iterative'),
+        ('OPT', 'OPT')])
+
+    N_file = len(args.datafile)
+    npzfile = 'dat-' + fname_str + '.npz'
+    if not args.load:
+        N_var = len(var)
+        A = np.ones((N_file, N_var), dtype=np.double) * np.nan
+        costs = OrderedDict([
+            ('RN', A.copy()),
+            ('BM', A.copy()),
+            ('ST', A.copy()),
+            ('RL', A.copy()),
+            ('IT', A.copy()),
+            ('OPT', A.copy())])
+        del A
+        for n_file in range(N_file):
+            datafile = args.datafile[n_file]
+            n_var = 0
+            for k in args.K:
+                for m in args.M:
+                    ec = EdgeCloud(datafile,
+                                   K=k, M=m, N=args.N,
+                                   max_time=args.max_time,
+                                   max_mem=args.max_mem)
+                    for alg in labels.keys():
+                        if alg != 'RN':
+                            N_run = 1
+                        else:
+                            N_run = 10
+                        cost_array = np.array([np.nan] * N_run)
+                        for n in range(N_run):
+                            ec.run(alg)
+                            ec.print_migrations()
+                            logging.info('Total cost of {}: {}'
+                                         .format(labels[alg], ec.get_cost()))
+                            cost_array[n] = ec.get_cost()
+                        costs[alg][n_file, n_var] = np.nanmean(cost_array)
+                    n_var += 1
+        np.savez(npzfile, **costs)
+    else:
+        costs = np.load(npzfile)
+    for key in labels.keys():
         logging.info('{:5}{}'.format(key, costs[key]))
     if not plot:
         return
     styles = {
-        'ST': 'k.-',
-        'BM': 'bo-',
-        'IT': 'g^-',
-        'RN': 'cx-',
-        'RL': 'r*-',
-        'OPT': 'md-'}
+        'ST': 'k.',
+        'BM': 'bo',
+        'IT': 'g^',
+        'RN': 'cx',
+        'RL': 'r*',
+        'OPT': 'md'}
     matplotlib.rcParams.update({'font.size': 16})
-    for key in costs.keys():
-        cost = np.array(costs[key], dtype=np.double)
-        mask = np.isfinite(cost)
-        var = np.array(var, dtype=np.uint32)
-        plt.plot(var[mask], cost[mask],
-                 styles[key], label=labels[key],
-                 linewidth=2.0)
+    var = np.array(var, dtype=np.uint32)
+    for key in labels.keys():
+        costs_mat = costs[key]
+        if N_file == 1:
+            cost_list = [np.ravel(costs_mat)]
+            linestyles = ['-']
+        else:
+            cost_list = [np.ravel(np.nanmean(costs_mat, axis=0)),
+                         np.ravel(np.nanmax(costs_mat, axis=0)),
+                         np.ravel(np.nanmin(costs_mat, axis=0))]
+            linestyles = ['-', '--', ':']
+        for i in range(len(cost_list)):
+            cost = cost_list[i]
+            linestyle = linestyles[i]
+            if i == 0:
+                label = labels[key]
+            else:
+                label = ''
+            mask = np.isfinite(cost)
+            plt.plot(var[mask], cost[mask],
+                     styles[key] + linestyles[i] , label=label,
+                     linewidth=2.0)
     plt.xlabel(var_str)
     plt.ylabel('Cost')
     # Dirty hack to not let legend cover data points.
