@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 class EdgeCloud():
     """The EdgeCloud class holds all the magic."""
 
-    def __init__(self, path_to_file, K=5, M=5, N=None):
+    def __init__(self, path_to_file, K=5, M=5, N=None, max_mem=1e9):
         """Initialize with a file containing the sequence of requests.
 
         :param path_to_file: string to specify the path to the file
@@ -41,6 +41,7 @@ class EdgeCloud():
         else:
             raise Exception('The parameter N should be '
                             'a positive integer or None.')
+        self.max_mem = max_mem
         self.requests = []
         with open(path_to_file, 'r') as f:
             if self.N is None:
@@ -287,7 +288,7 @@ class EdgeCloud():
             seqnum_del[svc_del] = n
         self.cost = self.cost_migration + self.cost_forwarding
 
-    def run_offline_opt(self, alg_time_threshold=60):
+    def run_offline_opt(self, alg_time_threshold=60, max_mem=None):
         """Offline optimal (OPT) algorithm.
 
         The algorithm calls the offline_opt_recursion routine to find the
@@ -317,6 +318,20 @@ class EdgeCloud():
             log_n = True
             logging.warning('OPT can be quite time consuming! '
                             'Progress will be displayed.')
+
+        if max_mem is None:
+            max_mem = self.max_mem
+        # LUT size assuming each (key, value) pair takes up 100 Bytes.
+        alg_mem = (self.N_unique ** self.K) * 2 * 100
+        if alg_mem > 0.1 * max_mem:
+            logging.info('alg_mem={:.2e}'.format(alg_mem))
+        if alg_mem > max_mem:
+            logging.warning('OPT is very likely to exceed the memory '
+                            'threshold so it is skipped. '
+                            'Increase max_mem if you really '
+                            'want to run it.')
+            self.cost = None
+            return
 
         # Pre-calculate offline_opt_recursion(n, es) for all n in 1:N-1 and all
         # possible set of edge services, so that LUT caches the intermediate
