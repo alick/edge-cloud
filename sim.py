@@ -837,6 +837,13 @@ def main():
                  linewidth=2.0)
     plt.xlabel(var_str)
     plt.ylabel('Cost')
+    # Dirty hack to not let legend cover data points.
+    if args.N == 100:
+        plt.ylim(40, 260)
+    elif args.N == 1000:
+        plt.ylim(200, 2000)
+    elif args.N == 10000:
+        plt.ylim(2000, 16000)
     plt.title(con_str + '={}'.format(con))
     plt.legend(loc='best')
     fname = 'fig-N{}-{}{}-{}{}_{}.pdf'.format(
