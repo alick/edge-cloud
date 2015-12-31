@@ -441,7 +441,7 @@ class EdgeCloud():
         # Estimated time (in seconds) needed to run the algorithm.
         alg_time = (self.N_unique ** 2) * self.K * self.N / (1e7)
         if alg_time > 1:
-            logging.info('alg_time={}'.format(alg_time))
+            logging.info('alg_time={:.3f}'.format(alg_time))
         if alg_time > alg_time_threshold:
             # Mark invalid cost.
             logging.warning('Offline Iterative is very likely to '
