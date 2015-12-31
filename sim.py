@@ -798,6 +798,7 @@ def main():
     else:
         # Both K and M are lists. Not supported.
         raise Error('K and M are both ranges. Not supported!')
+    N_var = max(len(args.M), len(args.K))
 
     # Configure logging.
     if args.debug:
@@ -826,7 +827,6 @@ def main():
     N_file = len(args.datafile)
     npzfile = 'dat-' + fname_str + '.npz'
     if not args.load:
-        N_var = len(var)
         A = np.ones((N_file, N_var), dtype=np.double) * np.nan
         costs = OrderedDict([
             ('RN', A.copy()),
