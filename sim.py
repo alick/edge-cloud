@@ -743,8 +743,15 @@ def main():
     plt.xlabel(var_str)
     if N_file == 1:
         plt.ylabel('Cost')
+        if args.N == 100:
+            plt.ylim(50, 470)
+        elif args.N == 1000:
+            plt.ylim(1000, 3000)
+        elif args.N == 10000:
+            plt.ylim(8000, 26000)
     else:
         plt.ylabel('Cost Per Request')
+        plt.ylim(-0.5, 5)
     plt.title('Heterogeneous System')
     plt.legend(loc='best')
     fname = 'fig-' + fname_str + '.pdf'
