@@ -20,15 +20,13 @@ import random
 class EdgeCloud():
     """The EdgeCloud class holds all the magic."""
 
-    def __init__(self, path_to_file, K=5, N=None, special=False, M=5,
+    def __init__(self, requests, K=5, special=False, M=5,
                  max_time=60):
         """Initialize with a file containing the sequence of requests.
 
         :param path_to_file: string to specify the path to the file
         :param K: number of servers hosted by edge cloud (default: 5)
         :param M: cost ratio of migration over forwarding (default: 5)
-        :param N: only use the first N requests from
-        file. Useful for debugging. Default is to use all requests.
         """
         if K >= 1:
             self.K = int(K)
@@ -36,26 +34,9 @@ class EdgeCloud():
             raise Exception('The parameter K should be a positive integer.')
         if special and M < 1:
                 raise Exception('The parameter M should be at least 1.')
-        if N is None:
-            self.N = None
-        elif N >= 1:
-            self.N = int(N)
-        else:
-            raise Exception('The parameter N should be '
-                            'a positive integer or None.')
         self.max_time = max_time
-        self.requests = []
-        with open(path_to_file, 'r') as f:
-            if self.N is None:
-                for line in f:
-                    r = int(line)  # one request specified by its service id
-                    self.requests.append(r)
-                self.N = len(self.requests)
-            else:
-                for x in range(self.N):
-                    line = next(f)
-                    r = int(line)
-                    self.requests.append(r)
+        self.requests = requests
+        self.N = len(self.requests)
 
         requests_cnt = defaultdict(int)  # a dict with default integer value 0
         for r in self.requests:
@@ -78,8 +59,6 @@ class EdgeCloud():
         self.gen_het_services(special=special, M=M)
 
         if self.N_unique <= self.K:
-            logging.warning('WARN: Storage can hold all possible '
-                            'services!')
             self.K = self.N_unique
 
         logging.info('No. requests: N={0}'.format(self.N))
@@ -95,6 +74,8 @@ class EdgeCloud():
 
         self.reset()
         logging.info('Initial edge services: {}'.format(self.edge_services))
+        if self.edge_services == self.services:
+            logging.warning('WARN: Edge cloud holds all available services!')
 
     def gen_het_services(self, special=False, M=5):
         self.M = dict()
@@ -543,6 +524,27 @@ class EdgeCloud():
         return self.cost
 
 
+def get_requests(datafile, N=None):
+    """Get a list of requests from the data file.
+
+    :param datafile: data file containing one (integer) request per line
+    :param N: only the first N requests needed
+    :return: a list of requests
+    """
+    requests = []
+    with open(datafile) as f:
+        if N is None:
+            for line in f:
+                r = int(line)
+                requests.append(r)
+        else:
+            for x in range(N):
+                line = next(f)
+                r = int(line)
+                requests.append(r)
+    return requests
+
+
 def parseNumRange(string):
     """Parse command line number range (e.g. 1-10, 2:5, 1, 2.33).
 
@@ -613,7 +615,7 @@ def main():
 
     if args.datafile is None or len(args.datafile) <= 0:
         args.datafile = ['traces/requests-job_id.dat']
-        fname_str = 'v1'
+        fname_str = 'v1-avg'
     else:
         # Get the part without directory nor suffix for each input file.
         basename = [path.splitext(path.basename(f))[0] for f in args.datafile]
@@ -663,27 +665,42 @@ def main():
         ('RN', 'Randomized'),
         ('BM', 'Bélády Mod'),
         ('ST', 'Static'),
-        ('RL', 'RL')])
+        ('RL', 'RL')
+        ])
     N_file = len(args.datafile)
     npzfile = 'dat-' + fname_str + '.npz'
     if not args.load:
         N_K = len(args.K)
-        A = np.ones((N_file, N_K), dtype=np.double) * np.nan
+        requests_chunks = []  # a list of lists
+        if N_file == 1:
+            N_chunk = 10
+            chunk_step = 100000
+            assert args.N is not None
+            requests = get_requests(args.datafile[0])
+            for n_chunk in range(N_chunk):
+                base = n_chunk * chunk_step
+                requests_chunks.append([])
+                requests_chunks[n_chunk] = requests[base:base+args.N]
+        else:
+            for datafile in args.datafile:
+                requests_chunks.append(get_requests(datafile))
+            N_chunk = len(requests_chunks)
+            assert N_chunk == N_file
+        A = np.ones((N_chunk, N_K), dtype=np.double) * np.nan
         costs = OrderedDict([
             ('RN', A.copy()),
             ('BM', A.copy()),
             ('ST', A.copy()),
             ('RL', A.copy())])
         del A
-        for n_file in range(N_file):
-            datafile = args.datafile[n_file]
+        for n_chunk in range(N_chunk):
             for n_K in range(N_K):
                 k = args.K[n_K]
                 if args.M is None:
-                    ec = EdgeCloud(datafile, K=k, N=args.N,
+                    ec = EdgeCloud(requests_chunks[n_chunk], K=k,
                                    max_time=args.max_time)
                 else:
-                    ec = EdgeCloud(datafile, K=k, N=args.N,
+                    ec = EdgeCloud(requests_chunks[n_chunk], K=k,
                                    special=True, M=args.M,
                                    max_time=args.max_time)
 
@@ -696,13 +713,14 @@ def main():
                     for n_run in range(N_run):
                         ec.run(alg)
                         ec.print_migrations()
-                        logging.info('Total cost of {}: {}'
+                        logging.debug('Total cost of {}: {}'
                                      .format(labels[alg], ec.get_cost()))
                         cost_array[n_run] = ec.get_cost()
                     if N_file == 1:
-                        costs[alg][n_file, n_K] = np.nanmean(cost_array)
+                        costs[alg][n_chunk, n_K] = np.nanmean(cost_array)
                     else:
-                        costs[alg][n_file, n_K] = np.nanmean(cost_array) / ec.N
+                        costs[alg][n_chunk, n_K] = \
+                            np.nanmean(cost_array) / ec.N
         np.savez(npzfile, **costs)
     else:
         costs = np.load(npzfile)
@@ -713,42 +731,25 @@ def main():
     var = args.K
     var_str = 'K'
     styles = {
-        'RN': 'cx',
-        'ST': 'k.',
-        'BM': 'bo',
-        'RL': 'r*'}
+        'RN': 'cx-',
+        'ST': 'k.-',
+        'BM': 'bo-',
+        'RL': 'r*-'}
     matplotlib.rcParams.update({'font.size': 16})
     var = np.array(var, dtype=np.uint32)
     for key in labels.keys():
-        costs_mat = costs[key]
-        if N_file == 1:
-            cost_list = [np.ravel(costs_mat)]
-            linestyles = ['-']
-        else:
-            cost_list = [np.ravel(np.nanmean(costs_mat, axis=0)),
-                         np.ravel(np.nanmax(costs_mat, axis=0)),
-                         np.ravel(np.nanmin(costs_mat, axis=0))]
-            linestyles = ['-', '--', ':']
-        for i in range(len(cost_list)):
-            cost = cost_list[i]
-            linestyle = linestyles[i]
-            if i == 0:
-                label = labels[key]
-            else:
-                label = ''
-            mask = np.isfinite(cost)
-            plt.plot(var[mask], cost[mask],
-                     styles[key] + linestyles[i], label=label,
-                     linewidth=2.0)
+        cost = np.ravel(np.nanmean(costs[key], axis=0))
+        mask = np.isfinite(cost)
+        plt.plot(var[mask], cost[mask],
+                 styles[key], label=labels[key],
+                 linewidth=2.0)
     plt.xlabel(var_str)
     if N_file == 1:
         plt.ylabel('Cost')
-        if args.N == 100:
-            plt.ylim(50, 470)
-        elif args.N == 1000:
-            plt.ylim(1000, 3000)
+        if args.N == 1000:
+            plt.ylim(800, 2000)
         elif args.N == 10000:
-            plt.ylim(8000, 26000)
+            plt.ylim(4000, 20000)
     else:
         plt.ylabel('Cost Per Request')
         plt.ylim(-0.5, 5)

@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # QA test for edge cloud simulation.
 
-from sim import EdgeCloud, parseNumRange
+from sim import EdgeCloud, parseNumRange, get_requests
 import pytest
 import random
 
@@ -11,7 +11,8 @@ class TestEdgeCloud:
 
     @pytest.fixture
     def ec(self):
-        return EdgeCloud('traces/requests-job_id.dat', K=5, N=100)
+        requests = get_requests('traces/requests-job_id.dat', 100)
+        return EdgeCloud(requests, K=5)
 
     def test_init(self, ec):
         assert ec.K == 5 == len(ec.edge_services)
@@ -103,8 +104,8 @@ class TestEdgeCloud:
         pass
 
     def test_special(self):
-        ec = EdgeCloud('traces/requests-job_id.dat', K=2, N=10,
-                       special=True, M=2)
+        requests = get_requests('traces/requests-job_id.dat', 10)
+        ec = EdgeCloud(requests, K=2, special=True, M=2)
         ec.run_no_migration()
         assert ec.get_cost() == 8
         ec.run_static()
@@ -115,6 +116,14 @@ class TestEdgeCloud:
         assert ec.get_cost() == 14
         ec.run_belady(modified=True)
         assert ec.get_cost() == 9
+
+
+def test_get_requests():
+    requests = get_requests('traces/requests-job_id.dat')
+    assert len(requests) > 3e6
+    N = 10000
+    requests = get_requests('traces/requests-job_id.dat', N)
+    assert len(requests) == N
 
 
 def test_parseNumRange():
