@@ -19,7 +19,7 @@ import re
 class EdgeCloud():
     """The EdgeCloud class holds all the magic."""
 
-    def __init__(self, path_to_file, K=5, M=5, N=None,
+    def __init__(self, requests, K=5, M=5,
                  max_time=60, max_mem=1e9):
         """Initialize with a file containing the sequence of requests.
 
@@ -37,27 +37,10 @@ class EdgeCloud():
             self.M = float(M)
         else:
             raise Exception('The parameter M should be at least 1.')
-        if N is None:
-            self.N = None
-        elif N >= 1:
-            self.N = int(N)
-        else:
-            raise Exception('The parameter N should be '
-                            'a positive integer or None.')
         self.max_time = max_time
         self.max_mem = max_mem
-        self.requests = []
-        with open(path_to_file, 'r') as f:
-            if self.N is None:
-                for line in f:
-                    r = int(line)  # one request specified by its service id
-                    self.requests.append(r)
-                self.N = len(self.requests)
-            else:
-                for x in range(self.N):
-                    line = next(f)
-                    r = int(line)
-                    self.requests.append(r)
+        self.requests = requests
+        self.N = len(self.requests)
 
         requests_cnt = defaultdict(int)  # a dict with default integer value 0
         for r in self.requests:
@@ -685,6 +668,27 @@ class EdgeCloud():
         return self.cost
 
 
+def get_requests(datafile, N=None):
+    """Get a list of requests from the data file.
+
+    :param datafile: data file containing one (integer) request per line
+    :param N: only the first N requests needed
+    :return: a list of requests
+    """
+    requests = []
+    with open(datafile) as f:
+        if N is None:
+            for line in f:
+                r = int(line)
+                requests.append(r)
+        else:
+            for x in range(N):
+                line = next(f)
+                r = int(line)
+                requests.append(r)
+    return requests
+
+
 def parseNumRange(string):
     """Parse command line number range (e.g. 1-10, 2:5, 1, 2.33).
 
@@ -758,7 +762,7 @@ def main():
 
     if args.datafile is None or len(args.datafile) <= 0:
         args.datafile = ['traces/requests-job_id.dat']
-        fname_str = 'v1'
+        fname_str = 'v1-avg'
     else:
         # Get the part without directory nor suffix for each input file.
         basename = [path.splitext(path.basename(f))[0] for f in args.datafile]
@@ -820,14 +824,29 @@ def main():
         ('RN', 'Randomized'),
         ('BM', 'Bélády Mod'),
         ('ST', 'Static'),
-        ('RL', 'RL'),
         ('IT', 'Iterative'),
-        ('OPT', 'OPT')])
+        ('RL', 'RL'),
+        ])
 
     N_file = len(args.datafile)
     npzfile = 'dat-' + fname_str + '.npz'
     if not args.load:
-        A = np.ones((N_file, N_var), dtype=np.double) * np.nan
+        requests_chunks = []  # a list of lists
+        if N_file == 1:
+            N_chunk = 10
+            chunk_step = 100000
+            assert args.N is not None
+            requests = get_requests(args.datafile[0])
+            for n_chunk in range(N_chunk):
+                base = n_chunk * chunk_step
+                requests_chunks.append([])
+                requests_chunks[n_chunk] = requests[base:base+args.N]
+        else:
+            for datafile in args.datafile:
+                requests_chunks.append(get_requests(datafile))
+            N_chunk = len(requests_chunks)
+            assert N_chunk == N_file
+        A = np.ones((N_chunk, N_var), dtype=np.double) * np.nan
         costs = OrderedDict([
             ('RN', A.copy()),
             ('BM', A.copy()),
@@ -836,13 +855,12 @@ def main():
             ('IT', A.copy()),
             ('OPT', A.copy())])
         del A
-        for n_file in range(N_file):
-            datafile = args.datafile[n_file]
+        for n_chunk in range(N_chunk):
             n_var = 0
             for k in args.K:
                 for m in args.M:
-                    ec = EdgeCloud(datafile,
-                                   K=k, M=m, N=args.N,
+                    ec = EdgeCloud(requests_chunks[n_chunk],
+                                   K=k, M=m,
                                    max_time=args.max_time,
                                    max_mem=args.max_mem)
                     for alg in labels.keys():
@@ -854,10 +872,10 @@ def main():
                         for n in range(N_run):
                             ec.run(alg)
                             ec.print_migrations()
-                            logging.info('Total cost of {}: {}'
+                            logging.debug('Total cost of {}: {}'
                                          .format(labels[alg], ec.get_cost()))
                             cost_array[n] = ec.get_cost()
-                        costs[alg][n_file, n_var] = np.nanmean(cost_array)
+                        costs[alg][n_chunk, n_var] = np.nanmean(cost_array)
                     n_var += 1
         np.savez(npzfile, **costs)
     else:
@@ -867,44 +885,28 @@ def main():
     if not plot:
         return
     styles = {
-        'ST': 'k.',
-        'BM': 'bo',
-        'IT': 'g^',
-        'RN': 'cx',
-        'RL': 'r*',
-        'OPT': 'md'}
+        'ST': 'kd-',
+        'BM': 'bo-',
+        'IT': 'g^-',
+        'RN': 'cx-',
+        'RL': 'r*-',
+        }
     matplotlib.rcParams.update({'font.size': 16})
     var = np.array(var, dtype=np.uint32)
     for key in labels.keys():
         costs_mat = costs[key]
-        if N_file == 1:
-            cost_list = [np.ravel(costs_mat)]
-            linestyles = ['-']
-        else:
-            cost_list = [np.ravel(np.nanmean(costs_mat, axis=0)),
-                         np.ravel(np.nanmax(costs_mat, axis=0)),
-                         np.ravel(np.nanmin(costs_mat, axis=0))]
-            linestyles = ['-', '--', ':']
-        for i in range(len(cost_list)):
-            cost = cost_list[i]
-            linestyle = linestyles[i]
-            if i == 0:
-                label = labels[key]
-            else:
-                label = ''
-            mask = np.isfinite(cost)
-            plt.plot(var[mask], cost[mask],
-                     styles[key] + linestyles[i], label=label,
-                     linewidth=2.0)
+        cost = np.ravel(np.nanmean(costs_mat, axis=0))
+        mask = np.isfinite(cost)
+        plt.plot(var[mask], cost[mask],
+                 styles[key], label=labels[key],
+                 linewidth=2.0, markersize=14)
     plt.xlabel(var_str)
     plt.ylabel('Cost')
     # Dirty hack to not let legend cover data points.
-    if args.N == 100:
-        plt.ylim(40, 260)
-    elif args.N == 1000:
-        plt.ylim(200, 2200)
+    if args.N == 1000:
+        plt.ylim()
     elif args.N == 10000:
-        plt.ylim(2000, 16000)
+        plt.ylim(0, 13000)
     plt.title(con_str + '={}'.format(con))
     plt.legend(loc='best')
     fname = 'fig-' + fname_str + '.pdf'

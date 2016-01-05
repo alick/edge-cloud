@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # QA test for edge cloud simulation.
 
-from sim import EdgeCloud, parseNumRange
+from sim import EdgeCloud, parseNumRange, get_requests
 import pytest
 import random
 
@@ -11,7 +11,13 @@ class TestEdgeCloud:
 
     @pytest.fixture
     def ec(self):
-        return EdgeCloud('traces/requests-job_id.dat', K=5, M=5, N=5000)
+        requests = get_requests('traces/requests-job_id.dat', N=5000)
+        return EdgeCloud(requests, K=5, M=5)
+
+    @pytest.fixture
+    def ec10(self):
+        requests = get_requests('traces/requests-job_id.dat', N=10)
+        return EdgeCloud(requests, K=1, M=1)
 
     def test_init(self, ec):
         assert ec.K == 5 == len(ec.edge_services)
@@ -37,13 +43,12 @@ class TestEdgeCloud:
         assert ec.cost_forwarding == 0
         assert ec.cost == ec.cost_migration == len(ec.migrations) * ec.M
 
-    def test_belady_modified(self, ec):
-        ec = EdgeCloud('traces/requests-job_id.dat', K=1, M=1, N=10)
-        ec.run_belady(modified=True)
-        assert ec.get_cost() == 8
-        assert len(ec.migrations) == 2
-        assert ec.migrations[0][0] == 5
-        assert ec.cost_forwarding > 0
+    def test_belady_modified(self, ec10):
+        ec10.run_belady(modified=True)
+        assert ec10.get_cost() == 8
+        assert len(ec10.migrations) == 2
+        assert ec10.migrations[0][0] == 5
+        assert ec10.cost_forwarding > 0
 
     def test_online_randomized(self, ec):
         random.seed(0)
@@ -70,31 +75,18 @@ class TestEdgeCloud:
         migration = ec.migrations[0]
         assert len(migration[1]) == 5 == len(migration[2])
 
-    def test_offline_opt(self, ec):
-        ec = EdgeCloud('traces/requests-job_id.dat', K=1, M=1, N=10)
-        ec.run_offline_opt()
-        assert ec.get_cost() == 8
-        assert len(ec.migrations) == 5
-        assert ec.migrations[0][0] == 2
+    def test_offline_opt(self, ec10):
+        ec10.run_offline_opt()
+        assert ec10.get_cost() == 8
+        assert len(ec10.migrations) == 5
+        assert ec10.migrations[0][0] == 2
 
-    def test_offline_iterative(self, ec):
-        ec = EdgeCloud('traces/requests-job_id.dat', K=1, M=1, N=10)
-        ec.run_offline_iterative()
+    def test_offline_iterative(self, ec10):
+        ec10.run_offline_iterative()
         # Same as run_offline_opt()
-        assert ec.get_cost() == 8
-        assert len(ec.migrations) == 5
-        assert ec.migrations[0][0] == 2
-        ec2 = EdgeCloud('traces/requests-job_id.dat', K=4, M=1, N=4)
-        ec2.run_offline_iterative()
-        assert ec2.get_cost() == 0
-        assert len(ec2.migrations) == 1
-        assert ec2.migrations[0][0] == 2
-        ec3 = EdgeCloud('traces/requests-job_id.dat', K=2, M=1, N=15)
-        ec3.run_offline_iterative()
-        assert ec3.get_cost() == 12
-        assert len(ec3.migrations) == 13
-        assert ec3.migrations[0][0] == 2
-        ec3.edge_services_matrix[0, -1] = 1390006181
+        assert ec10.get_cost() == 8
+        assert len(ec10.migrations) == 5
+        assert ec10.migrations[0][0] == 2
 
     def test_get_cost(self, ec):
         assert ec.get_cost() == ec.cost
@@ -103,9 +95,18 @@ class TestEdgeCloud:
         pass
 
     def test_float_M(self):
-        ec = EdgeCloud('traces/requests-job_id.dat', K=5, M=1.2, N=1000)
+        requests = get_requests('traces/requests-job_id.dat', N=1000)
+        ec = EdgeCloud(requests, K=5, M=1.2)
         ec.run_RL()
         assert True
+
+
+def test_get_requests():
+    requests = get_requests('traces/requests-job_id.dat')
+    assert len(requests) > 3e6
+    N = 10000
+    requests = get_requests('traces/requests-job_id.dat', N)
+    assert len(requests) == N
 
 
 def test_parseNumRange():
