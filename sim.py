@@ -14,6 +14,8 @@ import matplotlib
 import matplotlib.pyplot as plt
 import random
 import re
+from math import sqrt
+SPINE_COLOR = 'gray'
 
 
 class EdgeCloud():
@@ -727,6 +729,67 @@ def parseNumRange(string):
         return list(range(int(start), int(end) + 1))
 
 
+def latexify(fig_width=None, fig_height=None, columns=1):
+    """Set up matplotlib's RC params for LaTeX plotting.
+    Call this before plotting a figure.
+
+    Code adapted from https://nipunbatra.github.io/2014/08/latexify/ ,
+    which is adapted from
+    http://www.scipy.org/Cookbook/Matplotlib/LaTeX_Examples
+
+    Parameters
+    ----------
+    fig_width : float, optional, inches
+    fig_height : float,  optional, inches
+    columns : {1, 2}
+    """
+
+    assert columns in [1, 2]
+
+    if fig_width is None:
+        fig_width = 3.39 if columns == 1 else 6.9  # width in inches
+
+    if fig_height is None:
+        golden_mean = (sqrt(5) - 1) / 2     # Aesthetic ratio
+        fig_height = fig_width * golden_mean  # height in inches
+
+    MAX_HEIGHT_INCHES = 8.0
+    if fig_height > MAX_HEIGHT_INCHES:
+        print("WARNING: fig_height too large:" + fig_height +
+              "so will reduce to" + MAX_HEIGHT_INCHES + "inches.")
+        fig_height = MAX_HEIGHT_INCHES
+
+    params = {'backend': 'ps',
+              'axes.labelsize': 8,   # fontsize for x and y labels (was 10)
+              'axes.titlesize': 8,
+              'font.size': 8,        # was 10
+              'legend.fontsize': 8,  # was 10
+              'xtick.labelsize': 8,
+              'ytick.labelsize': 8,
+              # 'text.usetex': True,
+              # 'text.latex.preamble': ['\usepackage{gensymb}'],
+              'figure.figsize': [fig_width, fig_height],
+              'font.family': 'serif'
+              }
+
+    matplotlib.rcParams.update(params)
+
+
+def format_axes(ax):
+
+    for spine in ['left', 'bottom', 'top', 'right']:
+        ax.spines[spine].set_color(SPINE_COLOR)
+        ax.spines[spine].set_linewidth(0.5)
+
+    ax.xaxis.set_ticks_position('bottom')
+    ax.yaxis.set_ticks_position('left')
+
+    for axis in [ax.xaxis, ax.yaxis]:
+        axis.set_tick_params(direction='out', color=SPINE_COLOR)
+
+    return ax
+
+
 def main():
     """Main routine.
     """
@@ -851,9 +914,9 @@ def main():
             ('RN', A.copy()),
             ('BM', A.copy()),
             ('ST', A.copy()),
-            ('RL', A.copy()),
             ('IT', A.copy()),
-            ('OPT', A.copy())])
+            ('RL', A.copy()),
+            ])
         del A
         for n_chunk in range(N_chunk):
             n_var = 0
@@ -873,7 +936,7 @@ def main():
                             ec.run(alg)
                             ec.print_migrations()
                             logging.debug('Total cost of {}: {}'
-                                         .format(labels[alg], ec.get_cost()))
+                                          .format(labels[alg], ec.get_cost()))
                             cost_array[n] = ec.get_cost()
                         costs[alg][n_chunk, n_var] = np.nanmean(cost_array)
                     n_var += 1
@@ -885,30 +948,30 @@ def main():
     if not plot:
         return
     styles = {
-        'ST': 'kd-',
+        'RN': 'mx-',
         'BM': 'bo-',
+        'ST': 'kd-',
         'IT': 'g^-',
-        'RN': 'cx-',
         'RL': 'r*-',
         }
-    matplotlib.rcParams.update({'font.size': 16})
     var = np.array(var, dtype=np.uint32)
+    latexify()
     for key in labels.keys():
         costs_mat = costs[key]
         cost = np.ravel(np.nanmean(costs_mat, axis=0))
         mask = np.isfinite(cost)
         plt.plot(var[mask], cost[mask],
-                 styles[key], label=labels[key],
-                 linewidth=2.0, markersize=14)
+                 styles[key], label=labels[key])
     plt.xlabel(var_str)
     plt.ylabel('Cost')
     # Dirty hack to not let legend cover data points.
     if args.N == 1000:
-        plt.ylim()
+        plt.ylim(100, 950)
     elif args.N == 10000:
         plt.ylim(0, 13000)
     plt.title(con_str + '={}'.format(con))
     plt.legend(loc='best')
+    format_axes(plt.gca())
     fname = 'fig-' + fname_str + '.pdf'
     plt.savefig(fname, bbox_inches='tight')
 
