@@ -726,7 +726,7 @@ def main():
 
     labels = OrderedDict([
         ('RN', 'Randomized'),
-        ('BM', 'Bélády Mod'),
+        ('BM', 'Belady Mod'),
         ('ST', 'Static'),
         ('RL', 'RL')
         ])
