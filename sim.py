@@ -945,6 +945,8 @@ def main():
         costs = np.load(npzfile)
     for key in labels.keys():
         logging.info('{}\n{}'.format(key, costs[key]))
+        csvfile = 'dat-' + fname_str + '-' + key + '.csv'
+        np.savetxt(csvfile, costs[key], delimiter=',')
     if not plot:
         return
     styles = {
