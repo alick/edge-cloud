@@ -725,7 +725,7 @@ def main():
             format='%(message)s')
 
     labels = OrderedDict([
-        ('BM', 'Belady Mod'),
+        ('BM', 'Belady'),
         ('ST', 'Static'),
         ('RL', 'RL')
         ])
