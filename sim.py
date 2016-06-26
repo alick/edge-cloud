@@ -884,7 +884,6 @@ def main():
             format='%(message)s')
 
     labels = OrderedDict([
-        ('RN', 'Randomized'),
         ('BM', 'Belady Mod'),
         ('ST', 'Static'),
         ('IT', 'Iterative'),
@@ -911,7 +910,6 @@ def main():
             assert N_chunk == N_file
         A = np.ones((N_chunk, N_var), dtype=np.double) * np.nan
         costs = OrderedDict([
-            ('RN', A.copy()),
             ('BM', A.copy()),
             ('ST', A.copy()),
             ('IT', A.copy()),
@@ -950,7 +948,6 @@ def main():
     if not plot:
         return
     styles = {
-        'RN': 'mx-',
         'BM': 'bo-',
         'ST': 'kd-',
         'IT': 'g^-',
