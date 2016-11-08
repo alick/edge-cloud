@@ -811,7 +811,7 @@ def main():
         if args.N == 1000:
             plt.ylim(800, 2000)
         elif args.N == 10000:
-            plt.ylim(4000, 20000)
+            plt.ylim(4000, 22000)
     else:
         plt.ylabel('Cost Per Request')
         plt.ylim(-0.5, 5)
