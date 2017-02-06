@@ -86,7 +86,8 @@ class EdgeCloud():
         """Reset parameters updated by algorithms."""
         # Fill in the initial K edge cloud services.
         # We use the K services with lowest id.
-        self.edge_services = set(self.sorted_requests[0:self.K])
+        self.init_edge_services = set(self.sorted_requests[0:self.K])
+        self.edge_services = self.init_edge_services
         self.cost_migration = 0
         self.cost_forwarding = 0
         self.cost = 0
@@ -112,6 +113,8 @@ class EdgeCloud():
             self.run_RL()
         elif alg == 'OPT':
             self.run_offline_opt()
+        elif alg == 'HA':
+            self.run_offline_handicap()
         elif alg == 'NM':
             self.run_no_migration()
         elif alg == 'BE':
@@ -455,6 +458,115 @@ class EdgeCloud():
         svc_tuple = min(svc_tuples, key=lambda x: (x[1], -len(x[2]), x[0]))
         res = (svc_tuple[1], svc_tuple[2])
         self.offline_opt_recursion_lut[key] = res
+        return res
+
+    def run_offline_handicap(self, max_time=None, max_mem=None):
+        """Offline optimal (OPT) handicapped algorithm.
+
+        The offline algorithm is handicapped as each migration incurs a
+        cost of KM, although it is allowed to migrate up to K services.
+        """
+
+        self.reset()
+
+        # Whether to record n in the debug log to indicate the progress.
+        log_n = False
+        if max_time is None:
+            max_time = self.max_time
+        # Estimated time (in seconds) needed to run the algorithm.
+        # Not an accurate estimation though.
+        alg_time = ((self.N ** 3) * math.log2(self.N))/ (1.5e6)
+        if alg_time > 1:
+            logging.info('alg_time={}'.format(alg_time))
+        if alg_time > max_time:
+            # Mark invalid cost.
+            logging.warning('HA is very likely to exceed the time '
+                            'threshold so it is skipped. '
+                            'Increase max_time if you really '
+                            'want to run it.')
+            self.cost = None
+            return
+        elif alg_time > (max_time * 0.5):
+            log_n = True
+            logging.warning('HA can be quite time consuming! '
+                            'Progress will be displayed.')
+
+        if max_mem is None:
+            max_mem = self.max_mem
+        # LUT size assuming each (key, value) pair takes up 100 Bytes.
+        alg_mem = (self.N) * 100
+        if alg_mem > 0.1 * max_mem:
+            logging.info('alg_mem={:.2e}'.format(alg_mem))
+        if alg_mem > max_mem:
+            logging.warning('HA is very likely to exceed the memory '
+                            'threshold so it is skipped. '
+                            'Increase max_mem if you really '
+                            'want to run it.')
+            self.cost = None
+            return
+
+        # LUT for offline_handicap_recursion function.
+        self.offline_handicap_lut = defaultdict(lambda: (-1, []))
+
+        # Pre-calculate offline_handicap_recursion(n) for all n in 1:N-1
+        # so that LUT caches the intermediate results.
+        for n in range(self.N + 1):
+            if log_n:
+                logging.info('n={}'.format(n))
+            (c, migrations) = self.offline_handicap_recursion(n=n)
+        self.cost = c
+        assert (migrations[0])[0] == -1
+        # Recover migration and deletion events.
+        prev_m = self.init_edge_services
+        for k in range(1, len(migrations)):
+            (i, m) = migrations[k]
+            migrated = m - prev_m
+            deleted = prev_m - m
+            m_tuple = (i, migrated, deleted)
+            self.migrations.append(m_tuple)
+
+    def offline_handicap_recursion(self, n):
+        """Offline optimal handicapped recursion routine.
+
+        :param n: sequence number of last request
+        :return (cost, migrations) tuple for requests 1:n
+        Note here migrations is a list of tuple (i, svc).
+        """
+        if (self.offline_handicap_lut[n])[0] >= 0:
+            return self.offline_handicap_lut[n]
+
+        if n <= 0:
+            res = (0, [(-1, self.init_edge_services)])
+            self.offline_handicap_lut[n] = res
+            return res
+
+        svc_tuples = [] # a list of tuple (i-th req, cost, migrations)
+        # Note that Python lists count from 0.
+        for i in range(n):
+            # Calculate cost when the last migration is after the i-th request.
+            # Init with the previous cost.
+            (c, m) = self.offline_handicap_lut[i]
+            # Add the cost of forwarding non-top K services in i:n
+            requests_cnt = defaultdict(int)
+            for r in self.requests[i:n+1]:
+                requests_cnt[r] += 1
+            sorted_requests_cnt = sorted(
+                requests_cnt.items(),
+                key=lambda x: (x[1], x[0]),
+                reverse=True)
+            if len(sorted_requests_cnt) > self.K:
+                c += sum([v for (k, v) in sorted_requests_cnt[self.K:]])
+            # Services in the edge-cloud after the i-th request.
+            svc = set([k for (k, v) in sorted_requests_cnt[:self.K]])
+            # If there is a migration, we charge KM for that.
+            if (m[-1])[1] != svc:
+                c += self.K * self.M
+                svc_tuples.append((i, c, m + [(i, svc)]))
+            else:
+                svc_tuples.append((i, c, m))
+        svc_tuple = min(svc_tuples, key=lambda x: (x[1], -len(x[2]), x[0]))
+        res = (svc_tuple[1], svc_tuple[2])
+        self.offline_handicap_lut[n] = res
         return res
 
     def run_offline_iterative(self, max_time=None, max_mem=None):
@@ -888,6 +1000,7 @@ def main():
         ('ST', 'Static'),
         ('IT', 'Iterative'),
         ('RL', 'RL'),
+        ('HA', 'Handicapped'),
         ])
 
     N_file = len(args.datafile)
@@ -914,6 +1027,7 @@ def main():
             ('ST', A.copy()),
             ('IT', A.copy()),
             ('RL', A.copy()),
+            ('HA', A.copy()),
             ])
         del A
         for n_chunk in range(N_chunk):
@@ -952,6 +1066,7 @@ def main():
         'ST': 'kd-',
         'IT': 'g^-',
         'RL': 'r*-',
+        'HA': 'mv-',
         }
     var = np.array(var, dtype=np.uint32)
     latexify()
@@ -964,10 +1079,10 @@ def main():
     plt.xlabel(var_str)
     plt.ylabel('Cost')
     # Dirty hack to not let legend cover data points.
-    if args.N == 1000:
-        plt.ylim(100, 750)
-    elif args.N == 10000:
-        plt.ylim(0, 13000)
+    #if args.N == 1000:
+        #plt.ylim(100, 750)
+    #elif args.N == 10000:
+        #plt.ylim(0, 13000)
     plt.title(con_str + '={}'.format(con))
     plt.legend(loc='best')
     format_axes(plt.gca())
