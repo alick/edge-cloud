@@ -25,11 +25,11 @@ class EdgeCloud():
                  max_time=60, max_mem=1e9):
         """Initialize with a file containing the sequence of requests.
 
-        :param path_to_file: string to specify the path to the file
+        :param requests: list of requests
         :param K: number of servers hosted by edge cloud (default: 5)
         :param M: cost ratio of migration over forwarding (default: 5)
-        :param N: only use the first N requests from
-        file. Useful for debugging. Default is to use all requests.
+        :param max_time: maximum time allowed for each run of each alg
+        :param max_mem: maximum memory allowed for each run of each alg
         """
         if K >= 1:
             self.K = int(K)
