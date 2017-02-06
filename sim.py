@@ -920,7 +920,7 @@ def main():
                              '(default: 5)')
     parser.add_argument('-d', '--debug', dest='debug', action='store_true',
                         help='enable debug (default: disabled)')
-    parser.add_argument('--max-time', dest='max_time', type=int, default=60,
+    parser.add_argument('--max-time', dest='max_time', type=float, default=60,
                         help='maximum time in seconds to run each algorithm '
                              '(default: 60)')
     parser.add_argument('--max-mem', dest='max_mem', type=float, default=1e9,
