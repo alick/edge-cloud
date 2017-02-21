@@ -540,10 +540,16 @@ class EdgeCloud():
             self.offline_handicap_lut[n] = res
             return res
 
-        svc_tuples = [] # a list of tuple (i-th req, cost, migrations)
+        # Calculate cost when there is no migration at all.
+        # i.e. forward all requests not in initial services.
+        c = len([r for r in self.requests[0:n] if r not in
+                self.init_edge_services])
+        # a list of tuple (i-th req, cost, migrations)
+        svc_tuples = [(-1, c, [(-1, self.init_edge_services)])]
         # Note that Python lists count from 0.
         for i in range(n):
             # Calculate cost when the last migration is after the i-th request.
+            # (0-th means last migration before all requests.)
             # Init with the previous cost.
             (c, m) = self.offline_handicap_lut[i]
             # Add the cost of forwarding non-top K services in i:n
