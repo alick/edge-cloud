@@ -113,8 +113,8 @@ class EdgeCloud():
             self.run_RL()
         elif alg == 'OPT':
             self.run_offline_opt()
-        elif alg == 'HA':
-            self.run_offline_handicap()
+        elif alg == 'Ob':
+            self.run_offline_batch()
         elif alg == 'NM':
             self.run_no_migration()
         elif alg == 'BE':
@@ -460,10 +460,10 @@ class EdgeCloud():
         self.offline_opt_recursion_lut[key] = res
         return res
 
-    def run_offline_handicap(self, max_time=None, max_mem=None):
-        """Offline optimal (OPT) handicapped algorithm.
+    def run_offline_batch(self, max_time=None, max_mem=None):
+        """Offline optimal (OPT) batch-download algorithm.
 
-        The offline algorithm is handicapped as each migration incurs a
+        The offline algorithm is batch-download as each migration incurs a
         cost of KM, although it is allowed to migrate up to K services.
         """
 
@@ -480,7 +480,7 @@ class EdgeCloud():
             logging.info('alg_time={}'.format(alg_time))
         if alg_time > max_time:
             # Mark invalid cost.
-            logging.warning('HA is very likely to exceed the time '
+            logging.warning('OPTb is very likely to exceed the time '
                             'threshold so it is skipped. '
                             'Increase max_time if you really '
                             'want to run it.')
@@ -488,7 +488,7 @@ class EdgeCloud():
             return
         elif alg_time > (max_time * 0.5):
             log_n = True
-            logging.warning('HA can be quite time consuming! '
+            logging.warning('OPTb can be quite time consuming! '
                             'Progress will be displayed.')
 
         if max_mem is None:
@@ -498,22 +498,22 @@ class EdgeCloud():
         if alg_mem > 0.1 * max_mem:
             logging.info('alg_mem={:.2e}'.format(alg_mem))
         if alg_mem > max_mem:
-            logging.warning('HA is very likely to exceed the memory '
+            logging.warning('OPTb is very likely to exceed the memory '
                             'threshold so it is skipped. '
                             'Increase max_mem if you really '
                             'want to run it.')
             self.cost = None
             return
 
-        # LUT for offline_handicap_recursion function.
-        self.offline_handicap_lut = defaultdict(lambda: (-1, []))
+        # LUT for offline_batch_recursion function.
+        self.offline_batch_lut = defaultdict(lambda: (-1, []))
 
-        # Pre-calculate offline_handicap_recursion(n) for all n in 1:N-1
+        # Pre-calculate offline_batch_recursion(n) for all n in 1:N-1
         # so that LUT caches the intermediate results.
         for n in range(self.N + 1):
             if log_n:
                 logging.info('n={}'.format(n))
-            (c, migrations) = self.offline_handicap_recursion(n=n)
+            (c, migrations) = self.offline_batch_recursion(n=n)
         self.cost = c
         assert (migrations[0])[0] == -1
         # Recover migration and deletion events.
@@ -525,19 +525,19 @@ class EdgeCloud():
             m_tuple = (i, migrated, deleted)
             self.migrations.append(m_tuple)
 
-    def offline_handicap_recursion(self, n):
-        """Offline optimal handicapped recursion routine.
+    def offline_batch_recursion(self, n):
+        """Offline optimal batch-download recursion routine.
 
         :param n: sequence number of last request
         :return (cost, migrations) tuple for requests 1:n
         Note here migrations is a list of tuple (i, svc).
         """
-        if (self.offline_handicap_lut[n])[0] >= 0:
-            return self.offline_handicap_lut[n]
+        if (self.offline_batch_lut[n])[0] >= 0:
+            return self.offline_batch_lut[n]
 
         if n <= 0:
             res = (0, [(-1, self.init_edge_services)])
-            self.offline_handicap_lut[n] = res
+            self.offline_batch_lut[n] = res
             return res
 
         # Calculate cost when there is no migration at all.
@@ -551,7 +551,7 @@ class EdgeCloud():
             # Calculate cost when the last migration is after the i-th request.
             # (0-th means last migration before all requests.)
             # Init with the previous cost.
-            (c, m) = self.offline_handicap_lut[i]
+            (c, m) = self.offline_batch_lut[i]
             # Add the cost of forwarding non-top K services in i:n
             requests_cnt = defaultdict(int)
             for r in self.requests[i:n+1]:
@@ -572,7 +572,7 @@ class EdgeCloud():
                 svc_tuples.append((i, c, m))
         svc_tuple = min(svc_tuples, key=lambda x: (x[1], -len(x[2]), x[0]))
         res = (svc_tuple[1], svc_tuple[2])
-        self.offline_handicap_lut[n] = res
+        self.offline_batch_lut[n] = res
         return res
 
     def run_offline_iterative(self, max_time=None, max_mem=None):
@@ -1006,7 +1006,7 @@ def main():
         ('ST', 'Static'),
         ('IT', 'Iterative'),
         ('RL', 'RL'),
-        ('HA', 'Handicapped'),
+        ('Ob', 'OPTb'),
         ])
 
     N_file = len(args.datafile)
@@ -1033,7 +1033,7 @@ def main():
             ('ST', A.copy()),
             ('IT', A.copy()),
             ('RL', A.copy()),
-            ('HA', A.copy()),
+            ('Ob', A.copy()),
             ])
         del A
         for n_chunk in range(N_chunk):
@@ -1072,7 +1072,7 @@ def main():
         'ST': 'kd-',
         'IT': 'g^-',
         'RL': 'r*-',
-        'HA': 'mv-',
+        'Ob': 'mv-',
         }
     var = np.array(var, dtype=np.uint32)
     latexify()
