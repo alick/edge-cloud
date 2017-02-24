@@ -920,7 +920,8 @@ def main():
     """
     parser = argparse.ArgumentParser(
         description='Edge-cloud reconfiguration simulator.')
-    parser.add_argument('-N', dest='N', type=int, default=None,
+    # Make the argument N float so that we can specify 1e3 etc.
+    parser.add_argument('-N', dest='N', type=float, default=None,
                         help='number of requests from file '
                              'used in simulation')
     parser.add_argument('-K', dest='K',
@@ -967,6 +968,7 @@ def main():
             fname_str = '{}-{}{}'.format(start, end, other)
 
     if args.N is not None:
+        args.N = int(args.N)
         fname_str += '-N{}'.format(args.N)
 
     if len(args.M) == 1 and len(args.K) == 1:
