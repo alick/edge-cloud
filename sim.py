@@ -26,7 +26,7 @@ class EdgeCloud():
         """Initialize with a file containing the sequence of requests.
 
         :param requests: list of requests
-        :param K: number of servers hosted by edge cloud (default: 5)
+        :param K: # services can be hosted by edge cloud (default: 5)
         :param M: cost ratio of migration over forwarding (default: 5)
         :param max_time: maximum time allowed for each run of each alg
         :param max_mem: maximum memory allowed for each run of each alg
@@ -59,19 +59,18 @@ class EdgeCloud():
         # The requests sorted by keys (IDs) in ascending order.
         self.sorted_requests = sorted(requests_cnt.keys())
 
-        # Set of all possible services.
+        # Set of all services as seen in requests.
         self.services = set(self.sorted_requests)
         assert len(self.services) == self.N_unique
 
         if self.N_unique <= self.K:
             logging.warning('WARN: Storage can hold all possible '
                             'services!')
-            self.K = self.N_unique
 
         logging.info('No. requests: N={0}'.format(self.N))
         logging.info('No. unique services: |S|={0}'
                      .format(self.N_unique))
-        logging.info('No. edge services: K={0}'.format(self.K))
+        logging.info('Capacity: K={0}'.format(self.K))
         logging.info('Cost ratio: M={0}'.format(self.M))
 
         # Python 3.5 offers math.inf, which is equivalent to float('inf').
@@ -85,9 +84,12 @@ class EdgeCloud():
     def reset(self):
         """Reset parameters updated by algorithms."""
         # Fill in the initial K edge cloud services.
-        # We use the K services with lowest id.
-        self.init_edge_services = set(self.sorted_requests[0:self.K])
+        # We use K pseudo services with negative IDs.
+        self.init_edge_services = set(range(-1, -(self.K + 1), -1))
         self.edge_services = self.init_edge_services
+        # All services even including pseudo services.
+        # Useful for DP to enumerate all possbile services.
+        self.all_services = self.services | self.init_edge_services
         self.cost_migration = 0
         self.cost_forwarding = 0
         self.cost = 0
@@ -335,7 +337,7 @@ class EdgeCloud():
         # Estimated time (in seconds) needed to run the algorithm.
         alg_time = (self.N_unique ** self.K) * self.K * self.N / (1.5e5)
         if alg_time > 1:
-            logging.info('alg_time={}'.format(alg_time))
+            logging.info('OPT alg_time={}'.format(alg_time))
         if alg_time > max_time:
             # Mark invalid cost.
             logging.warning('OPT is very likely to exceed the time '
@@ -354,7 +356,7 @@ class EdgeCloud():
         # LUT size assuming each (key, value) pair takes up 100 Bytes.
         alg_mem = (self.N_unique ** self.K) * 2 * 100
         if alg_mem > 0.1 * max_mem:
-            logging.info('alg_mem={:.2e}'.format(alg_mem))
+            logging.info('OPT alg_mem={:.2e}'.format(alg_mem))
         if alg_mem > max_mem:
             logging.warning('OPT is very likely to exceed the memory '
                             'threshold so it is skipped. '
@@ -369,7 +371,7 @@ class EdgeCloud():
         for n in range(self.N + 1):
             if log_n:
                 logging.info('n={}'.format(n))
-            for es in itertools.combinations(self.services, self.K):
+            for es in itertools.combinations(self.all_services, self.K):
                 self.offline_opt_recursion(n=n, edge_services=set(es))
             # LUT prev <= current
             for key in self.offline_opt_recursion_lut.keys():
@@ -439,7 +441,7 @@ class EdgeCloud():
         svc_tuples = []  # a list of (service to be deleted, cost)
         # Find cost of migrating r & deleting one service in previous
         # configuration.
-        for s in self.services - edge_services:
+        for s in self.all_services - edge_services:
             es = edge_services.copy()
             es.remove(r)
             es.add(s)
@@ -477,7 +479,7 @@ class EdgeCloud():
         # Not an accurate estimation though.
         alg_time = ((self.N ** 3) * math.log2(self.N))/ (1.5e6)
         if alg_time > 1:
-            logging.info('alg_time={}'.format(alg_time))
+            logging.info('OPTb alg_time={}'.format(alg_time))
         if alg_time > max_time:
             # Mark invalid cost.
             logging.warning('OPTb is very likely to exceed the time '
@@ -496,7 +498,7 @@ class EdgeCloud():
         # LUT size assuming each (key, value) pair takes up 100 Bytes.
         alg_mem = (self.N) * 100
         if alg_mem > 0.1 * max_mem:
-            logging.info('alg_mem={:.2e}'.format(alg_mem))
+            logging.info('OPTb alg_mem={:.2e}'.format(alg_mem))
         if alg_mem > max_mem:
             logging.warning('OPTb is very likely to exceed the memory '
                             'threshold so it is skipped. '
@@ -588,7 +590,7 @@ class EdgeCloud():
         # Estimated time (in seconds) needed to run the algorithm.
         alg_time = (self.N_unique ** 2) * self.K * self.N / (1e7)
         if alg_time > 1:
-            logging.info('alg_time={:.3f}'.format(alg_time))
+            logging.info('IT alg_time={:.3f}'.format(alg_time))
         if alg_time > max_time:
             # Mark invalid cost.
             logging.warning('Offline Iterative is very likely to '
@@ -605,9 +607,10 @@ class EdgeCloud():
         # plus the size of edge_services_matrix
         alg_mem = (self.N_unique) * 2 * 100 + self.N * self.K * 4
         if alg_mem > 0.1 * max_mem:
-            logging.info('alg_mem={:.2e}'.format(alg_mem))
+            logging.info('IT alg_mem={:.2e}'.format(alg_mem))
         if alg_mem > max_mem:
-            logging.warning('OPT is very likely to exceed the memory '
+            logging.warning('Offline Iterative is very likely to exceed'
+                            'the memory '
                             'threshold so it is skipped. '
                             'Increase max_mem if you really '
                             'want to run it.')
@@ -618,13 +621,17 @@ class EdgeCloud():
         self.offline_iterative_cost_lut = defaultdict(lambda: (-1, []))
         # Matrix whose (k, n)-th element denotes the edge service in k-th
         # position after n-th arrival.
+        # Negative IDs accommodate initial pseudo services.
         self.edge_services_matrix = np.zeros((self.K, self.N + 1),
-                                             dtype=np.uint32)
-        self.edge_services_matrix[:, 0] = sorted(self.edge_services)
+                                             dtype=np.int32)
+        # Descending order: -1, -2, ...
+        self.edge_services_matrix[:, 0] = sorted(
+            self.init_edge_services,
+            reverse=True)
 
         for k in range(1, self.K + 1):
             for n in range(self.N + 1):
-                for s in self.services:
+                for s in self.all_services:
                     self.offline_iterative_cost(k, n, s)
                 # LUT prev <= current
                 for key in self.offline_iterative_cost_lut:
@@ -651,7 +658,7 @@ class EdgeCloud():
         # The eventual migration events need to be calculated after all
         # storage are considered.
         edge_services_prev = set(self.edge_services_matrix[:, 0])
-        assert edge_services_prev == self.edge_services
+        assert edge_services_prev == self.init_edge_services
         for n in range(1, self.N + 1):
             edge_services_cur = set(self.edge_services_matrix[:, n])
             edge_services_migrated = edge_services_cur - edge_services_prev
@@ -715,7 +722,7 @@ class EdgeCloud():
         # Now we know s is the same as r, which means s was here after (n-1)-th
         # arrival already, or there is a migration after n-th arrival.
         svc_tuples = [(c, e + [s], m)]
-        for svc in self.services - set([s]):
+        for svc in self.all_services - set([s]):
             key_tmp = (0, svc)
             (c, e, m) = self.offline_iterative_cost_lut[key_tmp]
             svc_tuples.append((c + self.M, e + [s], m + 1))
