@@ -1087,10 +1087,10 @@ def main():
         costs_mat = costs[key]
         cost = np.ravel(np.nanmean(costs_mat, axis=0))
         mask = np.isfinite(cost)
-        plt.plot(var[mask], cost[mask],
+        plt.plot(var[mask], cost[mask] / args.N,
                  styles[key], label=labels[key])
     plt.xlabel(var_str)
-    plt.ylabel('Cost')
+    plt.ylabel('Cost Per Request')
     # Dirty hack to not let legend cover data points.
     #if args.N == 1000:
         #plt.ylim(100, 750)
