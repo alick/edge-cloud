@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# Simulation of Edge Cloud Migration
+# Simulation of Edge-Cloud Reconfiguration
 
 # defaultdict provides default values for missing keys
 from collections import defaultdict, deque, OrderedDict
@@ -19,7 +19,7 @@ SPINE_COLOR = 'gray'
 
 
 class EdgeCloud():
-    """The EdgeCloud class holds all the magic."""
+    """The EdgeCloud class holds most of the magic."""
 
     def __init__(self, requests, K=5, M=5,
                  max_time=60, max_mem=1e9):
@@ -27,7 +27,7 @@ class EdgeCloud():
 
         :param requests: list of requests
         :param K: # services can be hosted by edge cloud (default: 5)
-        :param M: cost ratio of migration over forwarding (default: 5)
+        :param M: cost ratio of download over forwarding (default: 5)
         :param max_time: maximum time allowed for each run of each alg
         :param max_mem: maximum memory allowed for each run of each alg
         """
@@ -90,10 +90,10 @@ class EdgeCloud():
         # All services even including pseudo services.
         # Useful for DP to enumerate all possbile services.
         self.all_services = self.services | self.init_edge_services
-        self.cost_migration = 0
+        self.cost_download = 0
         self.cost_forwarding = 0
         self.cost = 0
-        self.migrations = []
+        self.downloads = []
         self.requests_seen = []
         # Count the times the offline_opt_recursion function is called.
         self.offline_opt_recursion_cnt = 0
@@ -117,8 +117,8 @@ class EdgeCloud():
             self.run_offline_opt()
         elif alg == 'Ob':
             self.run_offline_batch()
-        elif alg == 'NM':
-            self.run_no_migration()
+        elif alg == 'ND':
+            self.run_no_download()
         elif alg == 'BE':
             self.run_belady(modified=False)
         else:
@@ -127,18 +127,18 @@ class EdgeCloud():
     def run_belady(self, modified=False, max_time=None):
         """Bélády's algorithm or the clairvoyant algorithm.
 
-        The (unmodified) algorithm always migrate a missing service,
+        The (unmodified) algorithm always downloads a missing service,
         and deletes the existing service whose next occurrence is
         farthest in the future. It is offline optimal (OPT) in the
         cache (or page placement) problem, where the forwarding cost
-        is infinity, and the migration cost (M) is one.
+        is infinity, and the download cost (M) is one.
 
         The modified version will forward the missing service, if its
         next occurrence is farther than those in the edge services.
         It should have the same cost performance as the offline optimal
-        solution when the migration cost (M) is one. (But it might not
+        solution when the download cost (M) is one. (But it might not
         the same as the offline optimal (OPT), since it might not have
-        the most times of migrations.
+        the most times of downloads.
         """
         self.reset()
 
@@ -168,15 +168,15 @@ class EdgeCloud():
             n += 1
             logging.debug('n={}, request={}'.format(n, r))
 
-            migration = False
+            download = False
             if r not in self.edge_services:
                 # r is not hosted. Migrate it.
-                migration = True
+                download = True
             else:
                 # r is already hosted.
                 logging.debug('result: hosted')
                 continue
-            assert migration
+            assert download
             # Find the service to be deleted.
             # Note the [s] concatenated to self.requests is to avoid ValueError
             # exception raised by list.index() when no such element is found.
@@ -186,23 +186,23 @@ class EdgeCloud():
                           for s in self.edge_services]
             svc_del = max(svc_tuples, key=lambda x: (x[1], x[0]))[0]
             assert svc_del in self.edge_services
-            # Run and record the migration and deletion.
+            # Run and record the download and deletion.
             self.edge_services.remove(svc_del)
             if r != svc_del:
                 self.edge_services.add(r)
-                self.migrations.append((n, r, svc_del))
-                self.cost_migration += self.M
-                logging.debug('result: migrated. ({} deleted)'.format(svc_del))
+                self.downloads.append((n, r, svc_del))
+                self.cost_download += self.M
+                logging.debug('result: downloaded. ({} deleted)'.format(svc_del))
             else:
                 assert modified
                 self.cost_forwarding += 1
                 logging.debug('result: forwarded'.format(r))
-        self.cost = self.cost_migration + self.cost_forwarding
+        self.cost = self.cost_download + self.cost_forwarding
 
     def run_online_randomized(self):
         """The Online Randomized algorithm.
 
-        The algorithm migrates a service with probability 1/M, and
+        The algorithm downloads a service with probability 1/M, and
         deletes a random service in the edge cloud uniformly.
         """
         self.reset()
@@ -216,7 +216,7 @@ class EdgeCloud():
                 logging.debug('result: hosted')
                 continue
             if random.random() > 1 / self.M:
-                # No migration. Forwarding.
+                # No download. Forwarding.
                 self.cost_forwarding += 1
                 logging.debug('result: forwarded')
                 continue
@@ -224,15 +224,15 @@ class EdgeCloud():
             s_del = random.choice(tuple(self.edge_services))
             self.edge_services.remove(s_del)
             self.edge_services.add(r)
-            self.migrations.append((n, r, s_del))
-            self.cost_migration += self.M
-            logging.debug('result: migrated. ({} deleted)'.format(s_del))
-        self.cost = self.cost_migration + self.cost_forwarding
+            self.downloads.append((n, r, s_del))
+            self.cost_download += self.M
+            logging.debug('result: downloaded. ({} deleted)'.format(s_del))
+        self.cost = self.cost_download + self.cost_forwarding
 
     def run_RL(self, max_time=None):
-        """The RM-LRU (RL) Online algorithm.
+        """The RD-LRU (RL) Online algorithm.
 
-        The algorithm combines a retrospective migration (RM) policy and a
+        The algorithm combines a retrospective download (RD) policy and a
         least recently used (LRU) policy for deletion.
         """
         self.reset()
@@ -260,7 +260,7 @@ class EdgeCloud():
         # The sequence numbers of the most recent 2*M arrivals for all services
         seqnums = defaultdict(
             lambda: deque([0]*2*math.ceil(self.M), maxlen=2*math.ceil(self.M)))
-        # The sequence number of the latest migration for each service.
+        # The sequence number of the latest download for each service.
         seqnum_mig = defaultdict(int)
         # The sequence number of the latest deletion for each service.
         seqnum_del = defaultdict(int)
@@ -282,18 +282,18 @@ class EdgeCloud():
                 logging.debug('result: hosted')
                 continue
             # Now we know r (i.e. S_j, i^*) is not hosted by the edge cloud.
-            migration = False
+            download = False
             for req in self.edge_services:
                 # req (S_i) should be hosted by the edge cloud.
                 b[(req, r)] += 1
                 if b[(req, r)] >= 2*self.M:
-                    migration = True
-            if not migration:
+                    download = True
+            if not download:
                 # r needs to be forwarded.
                 logging.debug('result: forwarded')
                 self.cost_forwarding += 1
                 continue
-            assert migration is True
+            assert download is True
             # Find the service to be deleted.
             # It is the one in edge cloud with smallest sequence number for the
             # past 2M requests
@@ -301,22 +301,22 @@ class EdgeCloud():
             svc_tuples = [(s, seqnums[s][0]) for s in self.edge_services]
             svc_del = min(svc_tuples, key=lambda x: (x[1], x[0]))[0]
             assert svc_del in self.edge_services
-            # Run and record the migration and deletion.
+            # Run and record the download and deletion.
             self.edge_services.remove(svc_del)
             self.edge_services.add(r)
             assert r in self.edge_services
             assert svc_del not in self.edge_services
-            # Need to reset b_{i^*,j} = 0 for all j where i^* to be migrated,
+            # Need to reset b_{i^*,j} = 0 for all j where i^* to be downloaded,
             # and b_{i,j^*} = 0 for all i where j^* to be deleted.
             for b_key in b:
                 if b_key[0] == r or b_key[1] == svc_del:
                     b[b_key] = 0
-            self.migrations.append((n, r, svc_del))
-            self.cost_migration += self.M
-            logging.debug('result: migrated. ({} deleted)'.format(svc_del))
+            self.downloads.append((n, r, svc_del))
+            self.cost_download += self.M
+            logging.debug('result: downloaded. ({} deleted)'.format(svc_del))
             seqnum_mig[r] = n
             seqnum_del[svc_del] = n
-        self.cost = self.cost_migration + self.cost_forwarding
+        self.cost = self.cost_download + self.cost_forwarding
 
     def run_offline_opt(self, max_time=None, max_mem=None):
         """Offline optimal (OPT) algorithm.
@@ -385,12 +385,12 @@ class EdgeCloud():
                 cost_mig_svc_tuples.append(
                     self.offline_opt_recursion_lut[key] + key[1:])
         # Find the one with minimum cost.
-        # If tie: select the one with maximum number of migrations,
+        # If tie: select the one with maximum number of downloads,
         # If still tie: select the one with smallest ID(s).
         cost_mig_svc_tuple = min(
             cost_mig_svc_tuples,
             key=lambda x: (x[0], -len(x[1])) + x[2:])
-        (self.cost, self.migrations) = cost_mig_svc_tuple[0:2]
+        (self.cost, self.downloads) = cost_mig_svc_tuple[0:2]
 
         logging.debug('Function offline_opt_recursion() was called {} times.'
                       .format(self.offline_opt_recursion_cnt))
@@ -402,14 +402,14 @@ class EdgeCloud():
 
         :param n: sequence number of request arrival
         :param edge_services: the edge_services after the n-th arrival
-        :return (cost, migrations)
+        :return (cost, downloads)
         """
         self.offline_opt_recursion_cnt += 1
         # First, check whether it has been calculated before.
         # The key of LUT is a tuple of the sequence number followed by all the
         # edge services sorted by their IDs in the ascending order.
         # The value is a tuple of the cost calculated, followed by the list of
-        # corresponding migrations.
+        # corresponding downloads.
         key = (1,) + tuple(sorted(edge_services))
         if (self.offline_opt_recursion_lut[key])[0] >= 0:
             self.offline_opt_recursion_lut_cnt += 1
@@ -431,7 +431,7 @@ class EdgeCloud():
         # Note that Python lists count from 0.
         r = self.requests[n - 1]
         if r not in edge_services:
-            # forwarding, no migration
+            # forwarding, no download
             key_tmp = (0,) + tuple(sorted(edge_services))
             (c, m) = self.offline_opt_recursion_lut[key_tmp]
             res = (c + 1, m)
@@ -439,7 +439,7 @@ class EdgeCloud():
             return res
         assert r in edge_services
         svc_tuples = []  # a list of (service to be deleted, cost)
-        # Find cost of migrating r & deleting one service in previous
+        # Find cost of downloading r & deleting one service in previous
         # configuration.
         for s in self.all_services - edge_services:
             es = edge_services.copy()
@@ -448,14 +448,14 @@ class EdgeCloud():
             key_tmp = (0,) + tuple(sorted(es))
             (c, m) = self.offline_opt_recursion_lut[key_tmp]
             cost = self.M + c
-            migrations = m + [(n, r, s)]
-            svc_tuples.append((s, cost, migrations))
+            downloads = m + [(n, r, s)]
+            svc_tuples.append((s, cost, downloads))
         # Find cost of hosting r
         key_tmp = (0,) + tuple(sorted(edge_services))
         (c, m) = self.offline_opt_recursion_lut[key_tmp]
         svc_tuples.append((0, c, m))  # 0 is a fake service ID
         # Find the one with minimum cost.
-        # If tie: select the one with maximum number of migrations,
+        # If tie: select the one with maximum number of downloads,
         # If still tie: select the one with lowest ID.
         svc_tuple = min(svc_tuples, key=lambda x: (x[1], -len(x[2]), x[0]))
         res = (svc_tuple[1], svc_tuple[2])
@@ -465,8 +465,8 @@ class EdgeCloud():
     def run_offline_batch(self, max_time=None, max_mem=None):
         """Offline optimal (OPT) batch-download algorithm.
 
-        The offline algorithm is batch-download as each migration incurs a
-        cost of KM, although it is allowed to migrate up to K services.
+        The offline algorithm is batch-download as each download incurs a
+        cost of KM, although it is allowed to download up to K services.
         """
 
         self.reset()
@@ -515,24 +515,24 @@ class EdgeCloud():
         for n in range(self.N + 1):
             if log_n:
                 logging.info('n={}'.format(n))
-            (c, migrations) = self.offline_batch_recursion(n=n)
+            (c, downloads) = self.offline_batch_recursion(n=n)
         self.cost = c
-        assert (migrations[0])[0] == -1
-        # Recover migration and deletion events.
+        assert (downloads[0])[0] == -1
+        # Recover download and deletion events.
         prev_m = self.init_edge_services
-        for k in range(1, len(migrations)):
-            (i, m) = migrations[k]
-            migrated = m - prev_m
+        for k in range(1, len(downloads)):
+            (i, m) = downloads[k]
+            downloaded = m - prev_m
             deleted = prev_m - m
-            m_tuple = (i, migrated, deleted)
-            self.migrations.append(m_tuple)
+            m_tuple = (i, downloaded, deleted)
+            self.downloads.append(m_tuple)
 
     def offline_batch_recursion(self, n):
         """Offline optimal batch-download recursion routine.
 
         :param n: sequence number of last request
-        :return (cost, migrations) tuple for requests 1:n
-        Note here migrations is a list of tuple (i, svc).
+        :return (cost, downloads) tuple for requests 1:n
+        Note here downloads is a list of tuple (i, svc).
         """
         if (self.offline_batch_lut[n])[0] >= 0:
             return self.offline_batch_lut[n]
@@ -542,16 +542,16 @@ class EdgeCloud():
             self.offline_batch_lut[n] = res
             return res
 
-        # Calculate cost when there is no migration at all.
+        # Calculate cost when there is no download at all.
         # i.e. forward all requests not in initial services.
         c = len([r for r in self.requests[0:n] if r not in
                 self.init_edge_services])
-        # a list of tuple (i-th req, cost, migrations)
+        # a list of tuple (i-th req, cost, downloads)
         svc_tuples = [(-1, c, [(-1, self.init_edge_services)])]
         # Note that Python lists count from 0.
         for i in range(n):
-            # Calculate cost when the last migration is after the i-th request.
-            # (0-th means last migration before all requests.)
+            # Calculate cost when the last download is after the i-th request.
+            # (0-th means last download before all requests.)
             # Init with the previous cost.
             (c, m) = self.offline_batch_lut[i]
             # Add the cost of forwarding non-top K services in i:n
@@ -566,7 +566,7 @@ class EdgeCloud():
                 c += sum([v for (k, v) in sorted_requests_cnt[self.K:]])
             # Services in the edge-cloud after the i-th request.
             svc = set([k for (k, v) in sorted_requests_cnt[:self.K]])
-            # If there is a migration, we charge KM for that.
+            # If there is a download, we charge KM for that.
             if (m[-1])[1] != svc:
                 c += self.K * self.M
                 svc_tuples.append((i, c, m + [(i, svc)]))
@@ -645,7 +645,7 @@ class EdgeCloud():
                     c_e_m_tuples.append(
                         self.offline_iterative_cost_lut[key])
             # Find the one with minimum cost.
-            # If tie: select the one with maximum number of migrations,
+            # If tie: select the one with maximum number of downloads,
             # If still tie: select the one whose last service ID is smallest.
             (c, e, m) = min(c_e_m_tuples,
                             key=lambda x: (x[0], -x[2], x[1][-1]))
@@ -655,28 +655,28 @@ class EdgeCloud():
         if self.N <= 4:
             logging.debug('matrix=\n{}'.format(self.edge_services_matrix))
         # Note that a service might appear in more than one unit of storage.
-        # The eventual migration events need to be calculated after all
+        # The eventual download events need to be calculated after all
         # storage are considered.
         edge_services_prev = set(self.edge_services_matrix[:, 0])
         assert edge_services_prev == self.init_edge_services
         for n in range(1, self.N + 1):
             edge_services_cur = set(self.edge_services_matrix[:, n])
-            edge_services_migrated = edge_services_cur - edge_services_prev
+            edge_services_downloaded = edge_services_cur - edge_services_prev
             edge_services_deleted = edge_services_prev - edge_services_cur
-            if len(edge_services_migrated) or len(edge_services_deleted):
-                self.migrations.append((
+            if len(edge_services_downloaded) or len(edge_services_deleted):
+                self.downloads.append((
                     n,
-                    self.fmt_svc_set(edge_services_migrated),
+                    self.fmt_svc_set(edge_services_downloaded),
                     self.fmt_svc_set(edge_services_deleted)))
-            # Migrations should be at most once at a time.
-            if len(edge_services_migrated) > 1:
+            # Downloads should be at most once at a time.
+            if len(edge_services_downloaded) > 1:
                 logging.warning('I cannot believe it!')
                 logging.warning('n={}'.format(n))
-            self.cost_migration += len(edge_services_migrated) * self.M
+            self.cost_download += len(edge_services_downloaded) * self.M
             if self.requests[n - 1] not in edge_services_cur:
                 self.cost_forwarding += 1
             edge_services_prev = edge_services_cur
-        self.cost = self.cost_migration + self.cost_forwarding
+        self.cost = self.cost_download + self.cost_forwarding
 
     def offline_iterative_cost(self, k, n, s):
         """Calculate the cost of offline iterative algorithm with LUT.
@@ -688,7 +688,7 @@ class EdgeCloud():
                   minimum cost after the n-th arrival,
                   the corresponding edge service chain from the start
                   (0-th arrival) to the n-th arrival (inclusive), and
-                  its migration counts, given that
+                  its download counts, given that
                   L_k stores the service s after the n-th arrival.
         """
 
@@ -720,44 +720,44 @@ class EdgeCloud():
             return res
         assert r == s
         # Now we know s is the same as r, which means s was here after (n-1)-th
-        # arrival already, or there is a migration after n-th arrival.
+        # arrival already, or there is a download after n-th arrival.
         svc_tuples = [(c, e + [s], m)]
         for svc in self.all_services - set([s]):
             key_tmp = (0, svc)
             (c, e, m) = self.offline_iterative_cost_lut[key_tmp]
             svc_tuples.append((c + self.M, e + [s], m + 1))
         # Find the one with minimum cost.
-        # If tie: select the one with maximum number of migrations,
+        # If tie: select the one with maximum number of downloads,
         # If still tie: select the deleted service with smallest ID.
         res = min(svc_tuples, key=lambda x: (x[0], -x[2], x[1][-2]))
         self.offline_iterative_cost_lut[key] = res
         return res
 
-    def run_no_migration(self):
+    def run_no_download(self):
         self.reset()
-        # If no migration happens...
+        # If no download happens...
         for r in self.requests:
             if r not in self.edge_services:
                 self.cost_forwarding += 1
-        assert self.cost_migration == 0
+        assert self.cost_download == 0
         self.cost = self.cost_forwarding
 
     def run_static(self):
         """Offline static algorithm.
 
-        This algorithm migrates the K most popular services once and for all.
+        This algorithm downloads the K most popular services once and for all.
         """
         self.reset()
-        # Find the K most popular services, and migrate them.
+        # Find the K most popular services, and download them.
         edge_services_wished = set(
             x[0] for x in self.sorted_requests_cnt[0:self.K])
-        edge_services_migrated = edge_services_wished - self.edge_services
-        self.migrations.append((
+        edge_services_downloaded = edge_services_wished - self.edge_services
+        self.downloads.append((
             1,
-            tuple(edge_services_migrated),
+            tuple(edge_services_downloaded),
             tuple(self.edge_services - edge_services_wished)))
-        self.cost_migration = self.M * len(edge_services_migrated)
-        # After migration, edge services are the ones we want.
+        self.cost_download = self.M * len(edge_services_downloaded)
+        # After download, edge services are the ones we want.
         self.cost_forwarding = 0
         self.edge_services = edge_services_wished
         for r in self.requests:
@@ -765,17 +765,17 @@ class EdgeCloud():
                 self.cost_forwarding += 1
         assert self.cost_forwarding == self.N - sum(
             x[1] for x in self.sorted_requests_cnt[0:self.K])
-        self.cost = self.cost_migration + self.cost_forwarding
+        self.cost = self.cost_download + self.cost_forwarding
 
-    def print_migrations(self):
+    def print_downloads(self):
         format_str = '{0:>12}  {1!s:>25}  {2!s:>25}'
         logging.debug(format_str.format(
             'Sequence No.', 'Migrated Service ID(s)', 'Deleted Service ID(s)'))
-        for migration in self.migrations:
-            time = migration[0]
-            migrated = migration[1]
-            deleted = migration[2]
-            logging.debug(format_str.format(time, migrated, deleted))
+        for download in self.downloads:
+            time = download[0]
+            downloaded = download[1]
+            deleted = download[2]
+            logging.debug(format_str.format(time, downloaded, deleted))
 
     def fmt_svc_set(self, svc_set):
         res = tuple(svc_set)
@@ -790,7 +790,7 @@ class EdgeCloud():
         This serves as the public API, and should be used instead of
         directly accessing the attribute.
 
-        :return total cost (migration plus forwarding) of the algorithm
+        :return total cost (download plus forwarding) of the algorithm
         """
         return self.cost
 
@@ -919,7 +919,7 @@ def main():
     """Main routine.
     """
     parser = argparse.ArgumentParser(
-        description='Simulate edge cloud migration.')
+        description='Edge-cloud reconfiguration simulator.')
     parser.add_argument('-N', dest='N', type=int, default=None,
                         help='number of requests from file '
                              'used in simulation')
@@ -929,7 +929,7 @@ def main():
                              '(default: 5)')
     parser.add_argument('-M', dest='M',
                         type=parseNumRange, default=[5],
-                        help='cost ratio of migration over forwarding '
+                        help='cost ratio of download over forwarding '
                              '(default: 5)')
     parser.add_argument('-d', '--debug', dest='debug', action='store_true',
                         help='enable debug (default: disabled)')
@@ -1059,7 +1059,7 @@ def main():
                         cost_array = np.array([np.nan] * N_run)
                         for n in range(N_run):
                             ec.run(alg)
-                            ec.print_migrations()
+                            ec.print_downloads()
                             logging.debug('Total cost of {}: {}'
                                           .format(labels[alg], ec.get_cost()))
                             cost_array[n] = ec.get_cost()
