@@ -55,13 +55,10 @@ class EdgeCloud():
         # The requests sorted by keys (IDs) in ascending order.
         self.sorted_requests = sorted(requests_cnt.keys())
 
-        # Set of all possible services.
+        # Set of all services as seen in requests.
         self.services = set(self.sorted_requests)
 
         self.gen_het_services(special=special, M=M)
-
-        if self.N_unique <= self.K:
-            self.K = self.N_unique
 
         logging.info('No. requests: N={0}'.format(self.N))
         logging.info('No. unique services: |S|={0}'
@@ -98,25 +95,24 @@ class EdgeCloud():
                 self.F[s] = 1
                 self.W[s] = 1
 
-    def init_edge_services(self):
+    def gen_init_edge_services(self, M=5):
         """Initialize the services in the edge cloud storage.
 
-        We use the services with lowest ids that can fit in the storage.
+        We use K pseudo services with negative IDs.
         """
-        self.K_rem = self.K
-        self.edge_services = set()
-        for s in self.sorted_requests:
-            W = self.W[s]
-            # Skip the services which exceed the capacity.
-            if W <= self.K_rem:
-                self.edge_services.add(s)
-                self.K_rem -= W
-                if self.K_rem < 1:
-                    break
+        self.pseudo_services = set(range(-1, -(self.K + 1), -1))
+        self.all_services = self.services | self.pseudo_services
+        for s in self.pseudo_services:
+            self.M[s] = M
+            self.F[s] = 1
+            self.W[s] = 1
+        self.init_edge_services = self.pseudo_services
+        self.K_rem = 0
 
     def reset(self):
         """Reset parameters updated by algorithms."""
-        self.init_edge_services()
+        self.gen_init_edge_services()
+        self.edge_services = self.init_edge_services
         self.cost_migration = 0
         self.cost_forwarding = 0
         self.cost = 0
@@ -324,7 +320,7 @@ class EdgeCloud():
         b = defaultdict(int)
         # The sequence numbers of the most recent ceil(2*M_i/F_i) arrivals.
         seqnums = dict()
-        for s in self.services:
+        for s in self.all_services:
             qlen = math.ceil(2 * self.M[s] / self.F[s])
             seqnums[s] = deque([0]*qlen, maxlen=qlen)
         n = 0
