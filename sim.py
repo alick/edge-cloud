@@ -808,7 +808,7 @@ def main():
     plt.ylabel('Cost Per Request')
     if N_file == 1:
         if args.N == 1000:
-            plt.ylim(0.8, 2)
+            plt.ylim(0.4, 2)
         elif args.N == 10000:
             plt.ylim(0.4, 2.2)
     else:
