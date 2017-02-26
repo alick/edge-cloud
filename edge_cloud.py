@@ -1017,13 +1017,21 @@ def main():
             stream=sys.stdout,
             format='%(message)s')
 
-    labels = OrderedDict([
-        ('BM', 'Belady'),
-        ('ST', 'Static'),
-        ('IT', 'Iterative'),
-        ('RL', 'RL'),
-        ('Ob', 'OPTb'),
-        ])
+    if args.N <= 1000:
+        labels = OrderedDict([
+            ('BM', 'Belady'),
+            ('ST', 'Static'),
+            ('IT', 'Iterative'),
+            ('RL', 'RL'),
+            ('Ob', 'OPTb'),
+            ])
+    else:
+        labels = OrderedDict([
+            ('BM', 'Belady'),
+            ('ST', 'Static'),
+            ('IT', 'Iterative'),
+            ('RL', 'RL'),
+            ])
 
     N_file = len(args.datafile)
     npzfile = 'dat-' + fname_str + '.npz'
