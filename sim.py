@@ -725,9 +725,9 @@ def main():
             format='%(message)s')
 
     labels = OrderedDict([
-        ('BM', 'Belady\'s algorithm'),
-        ('ST', 'Optimal static configuration'),
-        ('RL', 'Our policy')
+        ('BM', 'Belady'),
+        ('ST', 'Static'),
+        ('RL', 'RL')
         ])
     N_file = len(args.datafile)
     npzfile = 'dat-' + fname_str + '.npz'
@@ -792,7 +792,7 @@ def main():
     if not plot:
         return
     var = args.K
-    var_str = 'Storage at edge cloud'
+    var_str = 'K'
     styles = {
         'BM': 'bo-',
         'ST': 'kd-',
@@ -807,7 +807,7 @@ def main():
                  styles[key], label=labels[key])
     plt.xlabel(var_str)
     if N_file == 1:
-        plt.ylabel('Total cost')
+        plt.ylabel('Cost')
         if args.N == 1000:
             plt.ylim(800, 2000)
         elif args.N == 10000:
