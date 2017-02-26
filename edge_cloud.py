@@ -1113,12 +1113,13 @@ def main():
     plt.xlabel(var_str)
     plt.ylabel('Cost Per Request')
     # Dirty hack to not let legend cover data points.
-    #if args.N == 1000:
-        #plt.ylim(100, 750)
-    #elif args.N == 10000:
-        #plt.ylim(0, 13000)
+    if args.N == 1000:
+        plt.ylim(0.1, 1.0)
+        plt.legend(loc='best', ncol=2)
+    elif args.N == 10000:
+        plt.ylim(0, 1.3)
+        plt.legend(loc='best')
     plt.title(con_str + '={}'.format(con))
-    plt.legend(loc='best')
     format_axes(plt.gca())
     fname = 'fig-' + fname_str + '.pdf'
     plt.savefig(fname, bbox_inches='tight')
