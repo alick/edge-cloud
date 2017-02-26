@@ -14,6 +14,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import random
 import re
+import time
 from math import sqrt
 SPINE_COLOR = 'gray'
 
@@ -469,6 +470,8 @@ class EdgeCloud():
         cost of KM, although it is allowed to download up to K services.
         """
 
+        wall_time_tic = time.perf_counter()
+        proc_time_tic = time.process_time()
         self.reset()
 
         # Whether to record n in the debug log to indicate the progress.
@@ -526,6 +529,10 @@ class EdgeCloud():
             deleted = prev_m - m
             m_tuple = (i, downloaded, deleted)
             self.downloads.append(m_tuple)
+        proc_time = time.process_time() - proc_time_tic
+        wall_time = time.perf_counter() - wall_time_tic
+        logging.info('OPTb proc_time={}s'.format(proc_time))
+        logging.info('OPTb wall_time={}s'.format(wall_time))
 
     def offline_batch_recursion(self, n):
         """Offline optimal batch-download recursion routine.
