@@ -1019,7 +1019,7 @@ def main():
 
     if args.N <= 1000:
         labels = OrderedDict([
-            ('BM', 'Belady'),
+            ('BM', 'Belady Mod'),
             ('ST', 'Static'),
             ('IT', 'Iterative'),
             ('RL', 'RL'),
@@ -1027,7 +1027,7 @@ def main():
             ])
     else:
         labels = OrderedDict([
-            ('BM', 'Belady'),
+            ('BM', 'Belady Mod'),
             ('ST', 'Static'),
             ('IT', 'Iterative'),
             ('RL', 'RL'),
