@@ -802,17 +802,16 @@ def main():
     for key in labels.keys():
         cost = np.ravel(np.nanmean(costs[key], axis=0))
         mask = np.isfinite(cost)
-        plt.plot(var[mask], cost[mask],
+        plt.plot(var[mask], cost[mask] / args.N,
                  styles[key], label=labels[key])
     plt.xlabel(var_str)
+    plt.ylabel('Cost Per Request')
     if N_file == 1:
-        plt.ylabel('Cost')
         if args.N == 1000:
-            plt.ylim(800, 2000)
+            plt.ylim(0.8, 2)
         elif args.N == 10000:
-            plt.ylim(4000, 22000)
+            plt.ylim(0.4, 2.2)
     else:
-        plt.ylabel('Cost Per Request')
         plt.ylim(-0.5, 5)
     plt.title('Heterogeneous System')
     plt.legend(loc='best')
