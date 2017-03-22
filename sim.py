@@ -724,7 +724,7 @@ def main():
         ('RN', 'Randomized'),
         ('BM', 'Belady Mod'),
         ('ST', 'Static'),
-        ('RL', 'RL')
+        ('RL', 'RED LED')
         ])
     N_file = len(args.datafile)
     npzfile = 'dat-' + fname_str + '.npz'
