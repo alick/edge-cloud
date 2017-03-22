@@ -1023,7 +1023,7 @@ def main():
             ('BM', 'Belady Mod'),
             ('ST', 'Static'),
             ('IT', 'Iterative'),
-            ('RL', 'RL'),
+            ('RL', 'RED LED'),
             ('Ob', 'OPTb'),
             ])
     else:
@@ -1032,7 +1032,7 @@ def main():
             ('BM', 'Belady Mod'),
             ('ST', 'Static'),
             ('IT', 'Iterative'),
-            ('RL', 'RL'),
+            ('RL', 'RED LED'),
             ])
 
     N_file = len(args.datafile)
