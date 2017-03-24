@@ -618,10 +618,11 @@ def latexify(fig_width=None, fig_height=None, columns=1):
               'legend.fontsize': 8,  # was 10
               'xtick.labelsize': 8,
               'ytick.labelsize': 8,
-              # 'text.usetex': True,
+              'text.usetex': True,
               # 'text.latex.preamble': ['\usepackage{gensymb}'],
               'figure.figsize': [fig_width, fig_height],
-              'font.family': 'serif'
+              'font.family': 'serif',
+              'font.serif': 'Times'
               }
 
     matplotlib.rcParams.update(params)
@@ -724,7 +725,7 @@ def main():
         ('RN', 'Randomized'),
         ('BM', 'Belady Mod'),
         ('ST', 'Static'),
-        ('RL', 'RED LED')
+        ('RL', '\\textsc{ReD/LeD}'),
         ])
     N_file = len(args.datafile)
     npzfile = 'dat-' + fname_str + '.npz'
@@ -804,7 +805,7 @@ def main():
         mask = np.isfinite(cost)
         plt.plot(var[mask], cost[mask] / args.N,
                  styles[key], label=labels[key])
-    plt.xlabel(var_str)
+    plt.xlabel('$' + var_str + '$')
     plt.ylabel('Cost Per Request')
     if N_file == 1:
         if args.N == 1000:
