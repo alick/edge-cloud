@@ -898,10 +898,11 @@ def latexify(fig_width=None, fig_height=None, columns=1):
               'legend.fontsize': 8,  # was 10
               'xtick.labelsize': 8,
               'ytick.labelsize': 8,
-              # 'text.usetex': True,
+              'text.usetex': True,
               # 'text.latex.preamble': ['\usepackage{gensymb}'],
               'figure.figsize': [fig_width, fig_height],
-              'font.family': 'serif'
+              'font.family': 'serif',
+              'font.serif': 'Times'
               }
 
     matplotlib.rcParams.update(params)
@@ -1023,7 +1024,7 @@ def main():
             ('BM', 'Belady Mod'),
             ('ST', 'Static'),
             ('IT', 'Iterative'),
-            ('RL', 'RED LED'),
+            ('RL', '\\textsc{ReD/LeD}'),
             ('Ob', 'OPTb'),
             ])
     else:
@@ -1110,7 +1111,7 @@ def main():
         mask = np.isfinite(cost)
         plt.plot(var[mask], cost[mask] / args.N,
                  styles[key], label=labels[key])
-    plt.xlabel(var_str)
+    plt.xlabel('$' + var_str + '$')
     plt.ylabel('Cost Per Request')
     # Dirty hack to not let legend cover data points.
     if args.N == 1000:
@@ -1119,7 +1120,7 @@ def main():
     elif args.N == 10000:
         plt.ylim(0, 1.3)
         plt.legend(loc='best')
-    plt.title(con_str + '={}'.format(con))
+    plt.title('${}={}$'.format(con_str, con))
     format_axes(plt.gca())
     fname = 'fig-' + fname_str + '.pdf'
     plt.savefig(fname, bbox_inches='tight')
