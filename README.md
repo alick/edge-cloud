@@ -1,5 +1,11 @@
-Here is the simulation code for edge-cloud reconfiguration. More details can be
-found in the [paper](http://dl.acm.org/authorize?N17312).
+Here is the simulation code for edge-cloud reconfiguration.
+
+There are two Git branches:
+
+- master: homogeneous systems
+- het:  heterogeneous systems
+
+More details can be found in the [paper](http://dl.acm.org/authorize?N17312).
 
 License: GPLv3+
 
