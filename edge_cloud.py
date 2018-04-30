@@ -22,15 +22,12 @@ SPINE_COLOR = 'gray'
 class EdgeCloud():
     """The EdgeCloud class holds most of the magic."""
 
-    def __init__(self, requests, K=5, M=5,
-                 max_time=60, max_mem=1e9):
+    def __init__(self, requests, K=5, M=5):
         """Initialize with a file containing the sequence of requests.
 
         :param requests: list of requests
         :param K: # services can be hosted by edge cloud (default: 5)
         :param M: cost ratio of download over forwarding (default: 5)
-        :param max_time: maximum time allowed for each run of each alg
-        :param max_mem: maximum memory allowed for each run of each alg
         """
         if K >= 1:
             self.K = int(K)
@@ -40,8 +37,6 @@ class EdgeCloud():
             self.M = float(M)
         else:
             raise Exception('The parameter M should be at least 1.')
-        self.max_time = max_time
-        self.max_mem = max_mem
         self.requests = requests
         self.N = len(self.requests)
 
@@ -80,6 +75,12 @@ class EdgeCloud():
         except AttributeError:
             math.inf = float('inf')
 
+        # Threshold of estimated time in seconds for an alg to finish.
+        # If exceeded, a warning will be printed out.
+        self.est_time_th = 60
+        # Threshold of estimated memory usage in bytes.
+        self.est_mem_th  = 1e9
+
         self.reset()
 
     def reset(self):
@@ -114,7 +115,7 @@ class EdgeCloud():
             self.run_online_randomized()
         elif alg == 'RL':
             self.run_RL()
-        elif alg == 'OPT':
+        elif alg == 'OP':
             self.run_offline_opt()
         elif alg == 'Ob':
             self.run_offline_batch()
@@ -125,7 +126,7 @@ class EdgeCloud():
         else:
             raise Exception('Unknown algorithm: {}'.format(alg))
 
-    def run_belady(self, modified=False, max_time=None):
+    def run_belady(self, modified=False):
         """Bélády's algorithm or the clairvoyant algorithm.
 
         The (unmodified) algorithm always downloads a missing service,
@@ -146,22 +147,16 @@ class EdgeCloud():
         alg_name = 'Bélády'
         if modified:
             alg_name += ' Modified'
-        if max_time is None:
-            max_time = self.max_time
         # Estimated time (in seconds) needed to run the algorithm.
         # Seems that (K+1)-multiple search in list.index() is
         # optimized, so no multiplication by K in calculation below.
-        alg_time = (self.N ** 2) / (2.5e8)
-        if alg_time > 1:
-            logging.info('alg_time={}'.format(alg_time))
-        if alg_time > max_time:
+        est_time = (self.N ** 2) / (2.5e8)
+        if est_time > 1:
+            logging.info('est_time={}'.format(est_time))
+        if est_time > self.est_time_th:
             # Mark invalid cost.
-            logging.warning('{} is very likely to exceed the time '
-                            'threshold so it is skipped. '
-                            'Increase max_time if you really '
-                            'want to run it.'.format(alg_name))
-            self.cost = None
-            return
+            logging.warning('{} is likely to take a long time.'
+                            .format(alg_name))
 
         # The sequence number of arrivals.
         n = 0
@@ -230,7 +225,7 @@ class EdgeCloud():
             logging.debug('result: downloaded. ({} deleted)'.format(s_del))
         self.cost = self.cost_download + self.cost_forwarding
 
-    def run_RL(self, max_time=None):
+    def run_RL(self):
         """The RD-LRU (RL) Online algorithm.
 
         The algorithm combines a retrospective download (RD) policy and a
@@ -238,20 +233,13 @@ class EdgeCloud():
         """
         self.reset()
 
-        if max_time is None:
-            max_time = self.max_time
         # Estimated time (in seconds) needed to run the algorithm.
-        alg_time = self.N_unique * self.N / (1.6e7)
-        if alg_time > 1:
-            logging.info('alg_time={}'.format(alg_time))
-        if alg_time > max_time:
+        est_time = self.N_unique * self.N / (1.6e7)
+        if est_time > 1:
+            logging.info('est_time={}'.format(est_time))
+        if est_time > self.est_time_th:
             # Mark invalid cost.
-            logging.warning('RL is very likely to exceed the time '
-                            'threshold so it is skipped. '
-                            'Increase max_time if you really '
-                            'want to run it.')
-            self.cost = None
-            return
+            logging.warning('RL is likely to take a long time.')
 
         # b_{i,j} = max_tau (sum x_j(l) - sum x_i(l))^+ for each service pair
         # Here sum is over the latest tau arrivals.
@@ -319,52 +307,35 @@ class EdgeCloud():
             seqnum_del[svc_del] = n
         self.cost = self.cost_download + self.cost_forwarding
 
-    def run_offline_opt(self, max_time=None, max_mem=None):
+    def run_offline_opt(self):
         """Offline optimal (OPT) algorithm.
 
         The algorithm calls the offline_opt_recursion routine to find the
         optimal solution. Its time complexity is roughly O(K^N).
 
-        :param max_time: estimated allowable time to run the
-                                   OPT algorithm (default 60s)
         """
 
+        wall_time_tic = time.perf_counter()
+        proc_time_tic = time.process_time()
         self.reset()
 
         # Whether to record n in the debug log to indicate the progress.
         log_n = False
-        if max_time is None:
-            max_time = self.max_time
         # Estimated time (in seconds) needed to run the algorithm.
-        alg_time = (self.N_unique ** self.K) * self.K * self.N / (1.5e5)
-        if alg_time > 1:
-            logging.info('OPT alg_time={}'.format(alg_time))
-        if alg_time > max_time:
-            # Mark invalid cost.
-            logging.warning('OPT is very likely to exceed the time '
-                            'threshold so it is skipped. '
-                            'Increase max_time if you really '
-                            'want to run it.')
-            self.cost = None
-            return
-        elif alg_time > (max_time * 0.5):
+        est_time = (self.N_unique ** self.K) * self.K * self.N / (1.5e5)
+        if est_time > 1:
+            logging.info('OPT est_time={}'.format(est_time))
+        if est_time > self.est_time_th:
             log_n = True
             logging.warning('OPT can be quite time consuming! '
                             'Progress will be displayed.')
 
-        if max_mem is None:
-            max_mem = self.max_mem
         # LUT size assuming each (key, value) pair takes up 100 Bytes.
-        alg_mem = (self.N_unique ** self.K) * 2 * 100
-        if alg_mem > 0.1 * max_mem:
-            logging.info('OPT alg_mem={:.2e}'.format(alg_mem))
-        if alg_mem > max_mem:
-            logging.warning('OPT is very likely to exceed the memory '
-                            'threshold so it is skipped. '
-                            'Increase max_mem if you really '
-                            'want to run it.')
-            self.cost = None
-            return
+        est_mem = (self.N_unique ** self.K) * 2 * 100
+        if est_mem > 0.1 * self.est_mem_th:
+            logging.info('OPT est_mem={:.2e}'.format(est_mem))
+        if est_mem > self.est_mem_th:
+            logging.warning('OPT is likely to consume a lof of memory.')
 
         # Pre-calculate offline_opt_recursion(n, es) for all n in 1:N-1 and all
         # possible set of edge services, so that LUT caches the intermediate
@@ -397,6 +368,10 @@ class EdgeCloud():
                       .format(self.offline_opt_recursion_cnt))
         logging.debug('LUT was hit {} times.'
                       .format(self.offline_opt_recursion_lut_cnt))
+        proc_time = time.process_time() - proc_time_tic
+        wall_time = time.perf_counter() - wall_time_tic
+        logging.info('OPT proc_time={}s'.format(proc_time))
+        logging.info('OPT wall_time={}s'.format(wall_time))
 
     def offline_opt_recursion(self, n, edge_services):
         """Offline optimal (OPT) recursive routine.
@@ -463,8 +438,8 @@ class EdgeCloud():
         self.offline_opt_recursion_lut[key] = res
         return res
 
-    def run_offline_batch(self, max_time=None, max_mem=None):
-        """Offline optimal (OPT) batch-download algorithm.
+    def run_offline_batch(self):
+        """Offline optimal batch-download (OPTb) algorithm.
 
         The offline algorithm is batch-download as each download incurs a
         cost of KM, although it is allowed to download up to K services.
@@ -476,39 +451,22 @@ class EdgeCloud():
 
         # Whether to record n in the debug log to indicate the progress.
         log_n = False
-        if max_time is None:
-            max_time = self.max_time
         # Estimated time (in seconds) needed to run the algorithm.
         # Not an accurate estimation though.
-        alg_time = ((self.N ** 3) * math.log2(self.N))/ (1.5e6)
-        if alg_time > 1:
-            logging.info('OPTb alg_time={}'.format(alg_time))
-        if alg_time > max_time:
-            # Mark invalid cost.
-            logging.warning('OPTb is very likely to exceed the time '
-                            'threshold so it is skipped. '
-                            'Increase max_time if you really '
-                            'want to run it.')
-            self.cost = None
-            return
-        elif alg_time > (max_time * 0.5):
+        est_time = ((self.N ** 3) * math.log2(self.N))/ (1.5e6)
+        if est_time > 1:
+            logging.info('OPTb est_time={}'.format(est_time))
+        if est_time > self.est_time_th:
             log_n = True
             logging.warning('OPTb can be quite time consuming! '
                             'Progress will be displayed.')
 
-        if max_mem is None:
-            max_mem = self.max_mem
         # LUT size assuming each (key, value) pair takes up 100 Bytes.
-        alg_mem = (self.N) * 100
-        if alg_mem > 0.1 * max_mem:
-            logging.info('OPTb alg_mem={:.2e}'.format(alg_mem))
-        if alg_mem > max_mem:
-            logging.warning('OPTb is very likely to exceed the memory '
-                            'threshold so it is skipped. '
-                            'Increase max_mem if you really '
-                            'want to run it.')
-            self.cost = None
-            return
+        est_mem = (self.N) * 100
+        if est_mem > 0.1 * self.est_mem_th:
+            logging.info('OPTb est_mem={:.2e}'.format(est_mem))
+        if est_mem > self.est_mem_th:
+            logging.warning('OPTb is likely to consume a lot of memory.')
 
         # LUT for offline_batch_recursion function.
         self.offline_batch_lut = defaultdict(lambda: (-1, []))
@@ -584,7 +542,7 @@ class EdgeCloud():
         self.offline_batch_lut[n] = res
         return res
 
-    def run_offline_iterative(self, max_time=None, max_mem=None):
+    def run_offline_iterative(self):
         """Offline iterative algorithm.
 
         The algorithm runs offline optimal algorithm iteratively, each time
@@ -592,37 +550,23 @@ class EdgeCloud():
         """
         self.reset()
 
-        if max_time is None:
-            max_time = self.max_time
         # Estimated time (in seconds) needed to run the algorithm.
-        alg_time = (self.N_unique ** 2) * self.K * self.N / (1e7)
-        if alg_time > 1:
-            logging.info('IT alg_time={:.3f}'.format(alg_time))
-        if alg_time > max_time:
+        est_time = (self.N_unique ** 2) * self.K * self.N / (1e7)
+        if est_time > 1:
+            logging.info('IT est_time={:.3f}'.format(est_time))
+        if est_time > self.est_time_th:
             # Mark invalid cost.
-            logging.warning('Offline Iterative is very likely to '
-                            'exceed the time '
-                            'threshold so it is skipped. '
-                            'Increase max_time if you really '
-                            'want to run it.')
-            self.cost = None
-            return
+            logging.warning('Offline Iterative is likely to '
+                            'take a long time.')
 
-        if max_mem is None:
-            max_mem = self.max_mem
         # LUT size assuming each (key, value) pair takes up 100 Bytes,
         # plus the size of edge_services_matrix
-        alg_mem = (self.N_unique) * 2 * 100 + self.N * self.K * 4
-        if alg_mem > 0.1 * max_mem:
-            logging.info('IT alg_mem={:.2e}'.format(alg_mem))
-        if alg_mem > max_mem:
-            logging.warning('Offline Iterative is very likely to exceed'
-                            'the memory '
-                            'threshold so it is skipped. '
-                            'Increase max_mem if you really '
-                            'want to run it.')
-            self.cost = None
-            return
+        est_mem = (self.N_unique) * 2 * 100 + self.N * self.K * 4
+        if est_mem > 0.1 * self.est_mem_th:
+            logging.info('IT est_mem={:.2e}'.format(est_mem))
+        if est_mem > self.est_mem_th:
+            logging.warning('Offline Iterative is likely to consume '
+                            'a lof of memory.')
 
         # LUT for offline_iterative_cost function.
         self.offline_iterative_cost_lut = defaultdict(lambda: (-1, []))
@@ -942,12 +886,6 @@ def main():
                              '(default: 5)')
     parser.add_argument('-d', '--debug', dest='debug', action='store_true',
                         help='enable debug (default: disabled)')
-    parser.add_argument('--max-time', dest='max_time', type=float, default=60,
-                        help='maximum time in seconds to run each algorithm '
-                             '(default: 60)')
-    parser.add_argument('--max-mem', dest='max_mem', type=float, default=1e9,
-                        help='maximum memory in bytes to run each algorithm '
-                             '(default: 1e9)')
     parser.add_argument('-f', dest='datafile', default=None, nargs='*',
                         help='data file(s) with the sequence of requests '
                         '(default: Google cluster data v1)')
@@ -1027,6 +965,8 @@ def main():
         ])
     if args.N <= 1000:
         labels['Ob'] = 'OPTb'
+    if args.N <= 100:
+        labels['OP'] = 'OPT'
 
     N_file = len(args.datafile)
     npzfile = 'dat-' + fname_str + '.npz'
@@ -1054,6 +994,7 @@ def main():
             ('IT', A.copy()),
             ('RL', A.copy()),
             ('Ob', A.copy()),
+            ('OP', A.copy()),
             ])
         del A
         for n_chunk in range(N_chunk):
@@ -1061,9 +1002,7 @@ def main():
             for k in args.K:
                 for m in args.M:
                     ec = EdgeCloud(requests_chunks[n_chunk],
-                                   K=k, M=m,
-                                   max_time=args.max_time,
-                                   max_mem=args.max_mem)
+                                   K=k, M=m)
                     for alg in labels.keys():
                         if alg != 'RN':
                             N_run = 1
@@ -1094,6 +1033,7 @@ def main():
         'IT': 'g^-',
         'RL': 'r*-',
         'Ob': 'cv-',
+        'OP': 'y+-',
         }
     var = np.array(var, dtype=np.uint32)
     latexify()
@@ -1108,9 +1048,11 @@ def main():
     # Dirty hack to not let legend cover data points.
     if args.N == 1000:
         plt.ylim(0.1, 1.0)
-        plt.legend(loc='best', ncol=2)
     elif args.N == 10000:
         plt.ylim(0, 1.3)
+    if args.N <= 1000:
+        plt.legend(loc='best', ncol=2)
+    else:
         plt.legend(loc='best')
     plt.title('${}={}$'.format(con_str, con))
     format_axes(plt.gca())
