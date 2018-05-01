@@ -1050,6 +1050,8 @@ def main():
         plt.ylim(0.1, 1.0)
     elif args.N == 10000:
         plt.ylim(0, 1.3)
+    elif args.N == 100:
+        plt.ylim(0.1, 1.1)
     if args.N <= 1000:
         plt.legend(loc='best', ncol=2)
     else:
