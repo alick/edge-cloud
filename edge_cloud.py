@@ -12,9 +12,10 @@ import itertools
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
-from os import path
-import re
 import random
+import re
+import time
+from os import path
 from math import sqrt
 SPINE_COLOR = 'gray'
 
