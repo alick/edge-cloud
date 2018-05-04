@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 import random
 import re
 import time
+from os import path
 from math import sqrt
 SPINE_COLOR = 'gray'
 
