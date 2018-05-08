@@ -849,6 +849,7 @@ def latexify(fig_width=None, fig_height=None, columns=1):
               'legend.shadow': False,
               'patch.linewidth': 0.5, # border width of legend box
               'legend.numpoints': 2,
+              'legend.loc': 'best',
               'lines.markeredgewidth': 0.5,
               'lines.linewidth': 1.0,
               'text.usetex': True,
@@ -1061,10 +1062,8 @@ def main():
         plt.ylim(0, 1.3)
     elif args.N == 100:
         plt.ylim(0.1, 1.1)
-    if args.N <= 1000:
-        plt.legend(loc='best', ncol=2)
-    else:
-        plt.legend(loc='best')
+    if len(labels) > 4:
+        plt.legend(ncol=2)
     plt.title('${}={}$'.format(con_str, con))
     format_axes(plt.gca())
     fname = 'fig-' + fname_str + '.pdf'
