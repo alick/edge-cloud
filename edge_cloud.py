@@ -1061,7 +1061,7 @@ def main():
     if args.N == 1000:
         plt.ylim(0.1, 1.0)
     elif args.N == 10000:
-        plt.ylim(0, 1.3)
+        plt.ylim(0.0, 1.0)
     elif args.N == 100:
         plt.ylim(0.1, 1.1)
     if len(labels) > 4:
