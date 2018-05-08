@@ -819,10 +819,8 @@ def main():
     if var[-1] == 15:
         plt.gca().set_xticks([5, 10, 15]);
     if N_file == 1:
-        if args.N == 1000:
-            plt.ylim(0.4, 2)
-        elif args.N == 10000:
-            plt.ylim(0.4, 2.2)
+        if args.N == 1000 or args.N == 10000:
+            plt.ylim(0.3, 2)
     else:
         plt.ylim(-0.5, 5)
     plt.title('Heterogeneous System')
