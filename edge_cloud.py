@@ -848,6 +848,9 @@ def latexify(fig_width=None, fig_height=None, columns=1):
               'legend.fancybox': False,
               'legend.shadow': False,
               'patch.linewidth': 0.5, # border width of legend box
+              'legend.numpoints': 2,
+              'lines.markeredgewidth': 0.5,
+              'lines.linewidth': 1.0,
               'text.usetex': True,
               # 'text.latex.preamble': ['\usepackage{gensymb}'],
               'figure.figsize': [fig_width, fig_height],
@@ -1033,7 +1036,7 @@ def main():
     if not plot:
         return
     styles = {
-        'RN': 'mx-',
+        'RN': 'mX-',
         'BM': 'bo-',
         'ST': 'kd-',
         'IT': 'g^-',
@@ -1048,7 +1051,7 @@ def main():
         cost = np.ravel(np.nanmean(costs_mat, axis=0))
         mask = np.isfinite(cost)
         plt.plot(var[mask], cost[mask] / args.N,
-                 styles[key], label=labels[key], linewidth=1.0)
+                 styles[key], label=labels[key], markeredgecolor='black')
     plt.xlabel('$' + var_str + '$')
     plt.ylabel('Cost Per Request')
     # Dirty hack to not let legend cover data points.
