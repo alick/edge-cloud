@@ -816,6 +816,8 @@ def main():
                  styles[key], label=labels[key], markeredgecolor='black')
     plt.xlabel('$' + var_str + '$')
     plt.ylabel('Cost Per Request')
+    if var[-1] == 15:
+        plt.gca().set_xticks([5, 10, 15]);
     if N_file == 1:
         if args.N == 1000:
             plt.ylim(0.4, 2)
