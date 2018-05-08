@@ -843,6 +843,11 @@ def latexify(fig_width=None, fig_height=None, columns=1):
               'legend.fontsize': 8,  # was 10
               'xtick.labelsize': 8,
               'ytick.labelsize': 8,
+              'legend.frameon': True,
+              'legend.edgecolor': 'black',
+              'legend.fancybox': False,
+              'legend.shadow': False,
+              'patch.linewidth': 0.5, # border width of legend box
               'text.usetex': True,
               # 'text.latex.preamble': ['\usepackage{gensymb}'],
               'figure.figsize': [fig_width, fig_height],
@@ -1043,7 +1048,7 @@ def main():
         cost = np.ravel(np.nanmean(costs_mat, axis=0))
         mask = np.isfinite(cost)
         plt.plot(var[mask], cost[mask] / args.N,
-                 styles[key], label=labels[key])
+                 styles[key], label=labels[key], linewidth=1.0)
     plt.xlabel('$' + var_str + '$')
     plt.ylabel('Cost Per Request')
     # Dirty hack to not let legend cover data points.
