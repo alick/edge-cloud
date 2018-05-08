@@ -1055,6 +1055,8 @@ def main():
                  styles[key], label=labels[key], markeredgecolor='black')
     plt.xlabel('$' + var_str + '$')
     plt.ylabel('Cost Per Request')
+    if var[-1] == 15:
+        plt.gca().set_xticks([5, 10, 15]);
     # Dirty hack to not let legend cover data points.
     if args.N == 1000:
         plt.ylim(0.1, 1.0)
