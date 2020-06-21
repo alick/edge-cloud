@@ -1056,7 +1056,7 @@ def main():
     plt.xlabel('$' + var_str + '$')
     plt.ylabel('Cost Per Request')
     if var[-1] == 15:
-        plt.gca().set_xticks([5, 10, 15]);
+        plt.gca().set_xticks([5, 10, 15])
     # Dirty hack to not let legend cover data points.
     if args.N == 1000:
         plt.ylim(0.1, 1.0)
@@ -1070,6 +1070,7 @@ def main():
     format_axes(plt.gca())
     fname = 'fig-' + fname_str + '.pdf'
     plt.savefig(fname, bbox_inches='tight')
+
 
 if __name__ == '__main__':
     main()
